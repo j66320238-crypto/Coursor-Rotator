@@ -1,0 +1,64 @@
+============================================================
+  CURSOR ROTATOR 1.0 - QUICK START
+  Random Windows cursor changer
+============================================================
+
+STEP 1  Copy your cursor .zip packs into the "Packs" folder.
+        No packs? Skip to step 2 and use the Download Store,
+        or double-click "Download Top Cursors.bat".
+
+STEP 2  Double-click  Start.bat
+
+That's all. The app unpacks your archives once, works out
+which cursor file is the arrow, the loading spinner, the text
+beam and so on, applies a random pack, drops into the system
+tray and opens its control panel in your browser.
+
+------------------------------------------------------------
+IN THE CONTROL PANEL (http://127.0.0.1:8777)
+------------------------------------------------------------
+  * Change cursor every  -> seconds, minutes or hours (min 5s)
+  * My Packs             -> ON/OFF switch on every pack. Green
+                            "ON - in rotation" or red "OFF -
+                            never used" is printed on each card.
+                            ANIMATED / RGB / ANIME badges too.
+  * Assign cursors       -> pick the exact file for each job
+                            (loading, link, text, location...)
+  * Download Store       -> 33 free packs. Search, filter by
+                            category (RGB / Animated / Anime /
+                            Game / Dark / Light / macOS), tick
+                            several and download them together.
+  * Diagnostics          -> what was found, and a "Fix it for me"
+
+------------------------------------------------------------
+HOTKEYS (anywhere in Windows)
+------------------------------------------------------------
+  Ctrl + Alt + C   change cursor now
+  Ctrl + Alt + P   pause / resume rotation
+
+------------------------------------------------------------
+TO UNDO EVERYTHING
+------------------------------------------------------------
+  Click "Restore Windows Default" in the app, or run
+  "Restore Windows Cursors.bat". Your original cursors were
+  backed up on first launch.
+
+------------------------------------------------------------
+COMMON QUESTIONS
+------------------------------------------------------------
+  "Folder is open in another program" when replacing files?
+      Run  "Update - Stop and Unlock Folder.bat"
+
+  No packs showing up?
+      Diagnostics tab -> "Fix it for me"
+
+  .rar or .7z pack won't extract?
+      Diagnostics tab -> "Download portable 7-Zip" -> Rescan
+      (WinRAR is not required)
+
+Full guide:      README.md
+Commands & API:  COMMANDS.md
+Log file:        Data\log.txt
+
+No installation. No admin rights. Nothing leaves your PC
+unless you press a Download button.

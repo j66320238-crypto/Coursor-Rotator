@@ -1,0 +1,917 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Cursor Rotator - Control Panel</title>
+<style>
+  :root{
+    --bg:#0b0e14; --panel:#141922; --panel2:#1b2230; --line:#28313f; --line2:#333e4f;
+    --text:#e8eef6; --muted:#8fa0b4; --acc:#5b9dff; --acc2:#22c55e; --warn:#f59e0b; --danger:#ef4444;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:"Segoe UI",system-ui,Arial,sans-serif;background:var(--bg);color:var(--text)}
+  header{position:sticky;top:0;z-index:20;background:rgba(13,17,24,.96);backdrop-filter:blur(8px);border-bottom:1px solid var(--line);padding:12px 20px;display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+  h1{font-size:17px;margin:0;letter-spacing:.3px;white-space:nowrap}
+  .dot{width:10px;height:10px;border-radius:50%;background:var(--acc2);box-shadow:0 0 10px var(--acc2)}
+  .dot.off{background:var(--warn);box-shadow:0 0 10px var(--warn)}
+  .spacer{flex:1}
+  .wrap{padding:20px;max-width:1280px;margin:0 auto}
+  .grid{display:grid;grid-template-columns:330px 1fr;gap:18px;align-items:start}
+  @media(max-width:920px){.grid{grid-template-columns:1fr}}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:16px;margin-bottom:16px}
+  .card h2{font-size:12px;text-transform:uppercase;letter-spacing:1.2px;color:var(--muted);margin:0 0 12px}
+  label{display:block;font-size:13px;color:var(--muted);margin:10px 0 4px}
+  input[type=number],input[type=text],select{width:100%;background:var(--panel2);border:1px solid var(--line2);color:var(--text);border-radius:9px;padding:9px 10px;font-size:14px;outline:none}
+  input:focus,select:focus{border-color:var(--acc)}
+  .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+  .btn{background:var(--panel2);border:1px solid var(--line2);color:var(--text);padding:9px 13px;border-radius:9px;cursor:pointer;font-size:13px;transition:.13s;white-space:nowrap}
+  .btn:hover{border-color:var(--acc)}
+  .btn:disabled{opacity:.5;cursor:not-allowed}
+  .btn.p{background:var(--acc);border-color:var(--acc);color:#04121f;font-weight:600}
+  .btn.g{background:var(--acc2);border-color:var(--acc2);color:#04120a;font-weight:600}
+  .btn.d{background:transparent;border-color:var(--danger);color:#ff9c9c}
+  .btn.sm{padding:6px 10px;font-size:12px}
+  .sw{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:9px 0;border-bottom:1px dashed var(--line)}
+  .sw:last-child{border-bottom:none}
+  .sw span{font-size:13px}
+  .toggle{position:relative;width:44px;height:24px;flex:0 0 44px;margin:0}
+  .toggle input{opacity:0;width:0;height:0}
+  .slider{position:absolute;inset:0;background:#3a4453;border-radius:99px;cursor:pointer;transition:.2s}
+  .slider:before{content:"";position:absolute;height:18px;width:18px;left:3px;top:3px;background:#fff;border-radius:50%;transition:.2s}
+  .toggle input:checked + .slider{background:var(--acc2)}
+  .toggle input:checked + .slider:before{transform:translateX(20px)}
+  .tabs{display:flex;gap:8px;align-items:center;margin-bottom:14px;flex-wrap:wrap}
+  .tab{background:transparent;border:1px solid var(--line);color:var(--muted);padding:8px 14px;border-radius:9px;cursor:pointer;font-size:13px}
+  .tab.on{background:var(--panel2);color:var(--text);border-color:var(--acc)}
+  .cnt{background:var(--acc);color:#04121f;border-radius:99px;padding:1px 7px;font-size:11px;font-weight:700;margin-left:6px}
+  .schemes{display:grid;grid-template-columns:repeat(auto-fill,minmax(268px,1fr));gap:12px}
+  .sc{background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:12px;transition:.13s;position:relative}
+  .sc:hover{border-color:var(--line2)}
+  .sc.active{border-color:var(--acc2);box-shadow:0 0 0 1px var(--acc2) inset}
+  .sc.off{opacity:.5}
+  .sc .nm{font-size:13px;font-weight:600;word-break:break-word;line-height:1.35}
+  .sc .mt{font-size:11px;color:var(--muted);margin:6px 0 8px}
+  .prev{display:flex;gap:6px;flex-wrap:wrap;min-height:44px;margin:8px 0}
+  .pv{width:42px;height:42px;background:#0c1017;border:1px solid var(--line);border-radius:8px;display:flex;align-items:center;justify-content:center;position:relative}
+  .pv img{max-width:30px;max-height:30px;image-rendering:auto}
+  .pv b{position:absolute;bottom:-1px;right:1px;font-size:8px;color:var(--muted);font-weight:600}
+  .mapimg{width:36px;height:36px;background:#0c1017;border:1px solid var(--line);border-radius:8px;display:flex;align-items:center;justify-content:center}
+  .mapimg img{max-width:28px;max-height:28px}
+  .chip{font-size:10px;padding:2px 7px;border-radius:99px;border:1px solid var(--line2);color:var(--muted)}
+  .bar{height:5px;border-radius:99px;background:#2a3342;overflow:hidden;margin:6px 0}
+  .bar i{display:block;height:100%;background:linear-gradient(90deg,var(--acc),var(--acc2))}
+  table{width:100%;border-collapse:collapse;font-size:13px}
+  td,th{padding:7px 6px;border-bottom:1px solid var(--line);text-align:left;vertical-align:middle}
+  th{color:var(--muted);font-weight:500;font-size:12px}
+  .pill{background:var(--panel2);border:1px solid var(--line);border-radius:99px;padding:6px 12px;font-size:12px;white-space:nowrap}
+  .status{font-size:12px;color:var(--muted);line-height:1.7}
+  dialog{background:var(--panel);color:var(--text);border:1px solid var(--line2);border-radius:14px;max-width:900px;width:95%;padding:0}
+  dialog::backdrop{background:rgba(0,0,0,.65)}
+  .dh{padding:14px 18px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:10px}
+  .db{padding:8px 18px 14px;max-height:62vh;overflow:auto}
+  .df{padding:12px 18px;border-top:1px solid var(--line);display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap}
+  .toast{position:fixed;right:18px;bottom:18px;z-index:50;background:var(--panel2);border:1px solid var(--acc);padding:11px 16px;border-radius:10px;font-size:13px;opacity:0;transform:translateY(10px);transition:.25s;pointer-events:none;max-width:420px}
+  .toast.on{opacity:1;transform:none}
+  .empty{text-align:center;color:var(--muted);padding:36px 10px;font-size:14px;line-height:1.9}
+  code{background:#080b11;padding:2px 6px;border-radius:5px;color:#9fd1ff;font-size:12px}
+  pre{background:#080b11;border:1px solid var(--line);border-radius:9px;padding:10px;font-size:12px;overflow:auto;max-height:240px;color:#a8b6c6}
+  .st{display:flex;gap:12px;align-items:center;background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:12px;margin-bottom:10px}
+  .st .info{flex:1;min-width:0}
+  .ok{color:var(--acc2);font-size:12px;font-weight:600}
+  .qk{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+  .qk button{background:var(--panel2);border:1px solid var(--line2);color:var(--muted);border-radius:8px;padding:5px 10px;font-size:12px;cursor:pointer}
+  .qk button:hover{color:var(--text);border-color:var(--acc)}
+
+.badge{display:inline-block;font-size:9px;font-weight:800;letter-spacing:.5px;padding:2px 6px;border-radius:999px;
+  background:#243045;color:#9fb3d0;border:1px solid #33415c}
+.badge.on{background:#123524;color:#4ade80;border-color:#1c5138}
+.badge.offb{background:#3a1d24;color:#fb7185;border-color:#5c2a34}
+.badge.anim{background:#2a1f45;color:#c4b5fd;border-color:#4c3a80}
+.badge.rgb{background:linear-gradient(90deg,#ef4444,#f59e0b,#22c55e,#3b82f6,#a855f7);color:#fff;border:none;text-shadow:0 1px 2px rgba(0,0,0,.5)}
+.badge.anime{background:#3d1f33;color:#f9a8d4;border-color:#6b3355}
+.badge.dark{background:#1b2130;color:#94a3b8;border-color:#2f3a4d}
+.badge.light{background:#e2e8f0;color:#1f2937;border-color:#cbd5e1}
+.chiprow{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:6px}
+.fchip{cursor:pointer;font-size:11px;padding:5px 10px;border-radius:999px;background:#182031;color:#9fb3d0;
+  border:1px solid #2b3648}
+.fchip:hover{background:#1e293b;color:#e2e8f0}
+.fchip.on{background:#2563eb;color:#fff;border-color:#2563eb}
+.fchip b{opacity:.75;font-weight:700}
+.selbox{width:17px;height:17px;accent-color:#2563eb;cursor:pointer;flex:none;margin-right:4px}
+.dlprog{margin:0 0 12px;padding:10px;border:1px solid #2b3648;border-radius:10px;background:#141c2b}
+.dlprog .bar{height:8px;background:#1e293b;border-radius:999px;overflow:hidden;margin-bottom:6px}
+.dlprog .bar i{display:block;height:100%;background:linear-gradient(90deg,#22c55e,#3b82f6);transition:width .3s}
+
+/* --- v1.0 --- */
+.drop{border:2px dashed #33415c;border-radius:14px;padding:16px;text-align:center;background:#121a27;margin-bottom:14px;transition:.15s}
+.drop.hot{border-color:#5b9dff;background:#16233a}
+.drop h3{margin:0 0 4px;font-size:14px}
+.drop p{margin:0 0 10px;font-size:12px;color:#8fa0b4}
+.uprog{height:8px;background:#1e293b;border-radius:999px;overflow:hidden;margin-top:10px;display:none}
+.uprog i{display:block;height:100%;width:0;background:linear-gradient(90deg,#22c55e,#3b82f6);transition:width .25s}
+.menu{position:relative;display:inline-block}
+.menu>.mbtn{background:#1b2230;border:1px solid #333e4f;color:#cbd5e1;border-radius:9px;padding:6px 10px;font-size:13px;cursor:pointer}
+.menu>.mbtn:hover{border-color:#5b9dff}
+.mlist{position:absolute;right:0;top:110%;z-index:40;background:#161d2a;border:1px solid #33415c;border-radius:10px;
+  min-width:190px;padding:5px;display:none;box-shadow:0 12px 30px rgba(0,0,0,.5)}
+.mlist.on{display:block}
+.mlist button{display:block;width:100%;text-align:left;background:none;border:none;color:#e2e8f0;padding:8px 10px;font-size:13px;border-radius:7px;cursor:pointer}
+.mlist button:hover{background:#22304a}
+.mlist button.dgr{color:#fca5a5}
+.mlist button.dgr:hover{background:#3b1d24}
+.pv.ani{outline:1px solid rgba(139,92,246,.55)}
+.pv .lbl{position:absolute;bottom:-2px;right:-2px;font-size:8px;background:#7c3aed;color:#fff;border-radius:4px;padding:0 3px}
+.builder{display:grid;grid-template-columns:150px 44px 1fr 84px;gap:8px;align-items:center;padding:6px 0;border-bottom:1px dashed #28313f}
+.builder:last-child{border-bottom:none}
+.builder .rl{font-size:12px;color:#cbd5e1}
+.builder .pvbox{width:40px;height:40px;display:flex;align-items:center;justify-content:center;background:#0f1520;border:1px solid #28313f;border-radius:8px}
+.builder .pvbox img{max-width:32px;max-height:32px;image-rendering:pixelated}
+.builder select{font-size:12px;padding:6px 8px}
+.danger{border-color:#5c2a34 !important;background:#180f13 !important}
+.danger h2{color:#fca5a5}
+.hint{font-size:11px;color:#8fa0b4}
+.pvwrap{position:relative}
+</style>
+</head>
+<body>
+<header>
+  <div class="dot" id="dot"></div>
+  <h1>Cursor Rotator</h1>
+  <span class="pill" id="nextPill">Next: --</span>
+  <span class="pill" id="curPill">Current: --</span>
+  <div class="spacer"></div>
+  <button class="btn g" onclick="api('/api/random')">Change Now</button>
+  <button class="btn" onclick="api('/api/rescan')">Rescan</button>
+  <button class="btn d" onclick="api('/api/restore')">Restore Windows Default</button>
+</header>
+
+<div class="wrap">
+<div class="grid">
+  <!-- LEFT -->
+  <div>
+    <div class="card">
+      <h2>Rotation</h2>
+      <div class="sw"><span>Auto rotation</span>
+        <label class="toggle"><input type="checkbox" id="enabled" onchange="save()"><span class="slider"></span></label></div>
+
+      <label>Change cursor every</label>
+      <div class="row">
+        <input type="number" id="ivVal" min="1" step="1" value="30" style="flex:1" onchange="save()">
+        <select id="ivUnit" style="width:118px" onchange="save()">
+          <option value="1">Seconds</option>
+          <option value="60">Minutes</option>
+          <option value="3600">Hours</option>
+        </select>
+      </div>
+      <div class="qk">
+        <button onclick="quick(10)">10s</button>
+        <button onclick="quick(30)">30s</button>
+        <button onclick="quick(60)">1m</button>
+        <button onclick="quick(300)">5m</button>
+        <button onclick="quick(900)">15m</button>
+        <button onclick="quick(1800)">30m</button>
+        <button onclick="quick(3600)">1h</button>
+        <button onclick="quick(21600)">6h</button>
+        <button onclick="quick(86400)">1 day</button>
+      </div>
+      <p class="status" style="margin:8px 0 0">Minimum 5 seconds.</p>
+
+      <div class="sw" style="margin-top:8px"><span>Random order</span>
+        <label class="toggle"><input type="checkbox" id="randomOrder" onchange="save()"><span class="slider"></span></label></div>
+      <div class="sw"><span>Never repeat same pack twice</span>
+        <label class="toggle"><input type="checkbox" id="avoidRepeat" onchange="save()"><span class="slider"></span></label></div>
+      <div class="sw"><span title="If a pack has no Location/Person/Handwriting cursor, the app borrows the pack's own arrow instead of leaving a Windows cursor behind">Fill missing cursors from the same pack</span>
+        <label class="toggle"><input type="checkbox" id="fillMissing" onchange="save()"><span class="slider"></span></label></div>
+      <div class="sw"><span>Change on app start</span>
+        <label class="toggle"><input type="checkbox" id="applyOnStart" onchange="save()"><span class="slider"></span></label></div>
+      <div class="sw"><span>Tray notifications</span>
+        <label class="toggle"><input type="checkbox" id="notifications" onchange="save()"><span class="slider"></span></label></div>
+      <div class="sw"><span>Global hotkeys<br><span style="font-size:11px;color:var(--muted)">Ctrl+Alt+C change · Ctrl+Alt+P pause</span></span>
+        <label class="toggle"><input type="checkbox" id="hotkeys" onchange="save()"><span class="slider"></span></label></div>
+      <div class="sw"><span>Start with Windows</span>
+        <label class="toggle"><input type="checkbox" id="autorun" onchange="save()"><span class="slider"></span></label></div>
+      <p class="status" style="margin-top:10px">Changes save automatically.</p>
+    </div>
+
+    <div class="card">
+      <h2>Folders &amp; App</h2>
+      <p class="status" style="margin:0 0 8px">Zips go in <b>Packs</b>. Each zip is unpacked <b>once</b> into a folder with the same name, right next to it.</p>
+      <div class="row">
+        <button class="btn sm" onclick="fetch('/api/openfolder?which=packs')">Open Packs folder</button>
+        <button class="btn sm" onclick="fetch('/api/openfolder?which=logs')">Open Logs</button>
+      </div>
+      <div class="row" style="margin-top:8px">
+        <button class="btn sm" onclick="load()">Refresh</button>
+        <button class="btn sm" onclick="fetch('/api/openfolder?which=custom')">Open my custom packs</button>
+        <button class="btn sm d" onclick="quitApp()">Exit App</button>
+      </div>
+      <p class="status" id="statusLine" style="margin-top:10px"></p>
+    </div>
+
+    <div class="card">
+      <h2>Make your own pack</h2>
+      <p class="status" style="margin:0 0 10px">Mix cursors from any packs you have — take the arrow from one theme,
+      the loading spinner from another — and save it as your own named pack.</p>
+      <button class="btn p" style="width:100%" onclick="openBuilder()">Create custom pack</button>
+    </div>
+
+    <div class="card danger">
+      <h2>Danger zone</h2>
+      <p class="status" style="margin:0 0 10px">Puts Windows back exactly as it was: original cursors, no autorun,
+      no settings. Optionally deletes every downloaded pack too.</p>
+      <label style="display:flex;align-items:center;gap:8px;font-size:12px;color:#cbd5e1;margin:0 0 10px">
+        <input type="checkbox" id="rmPacks" style="width:auto"> Also delete all cursor packs in the Packs folder
+      </label>
+      <button class="btn d" style="width:100%" onclick="removeEverything()">Remove everything</button>
+    </div>
+  </div>
+
+  <!-- RIGHT -->
+  <div>
+    <div class="card">
+      <div class="tabs">
+        <button class="tab on" id="tab-packs" onclick="showTab('packs')">My Packs <span class="cnt" id="cntPacks">0</span></button>
+        <button class="tab" id="tab-store" onclick="showTab('store')">Download Store</button>
+        <button class="tab" id="tab-diag" onclick="showTab('diag')">Diagnostics</button>
+      </div>
+
+      <div id="pane-packs">
+        <div class="drop" id="drop"
+             ondragover="event.preventDefault();this.classList.add('hot')"
+             ondragleave="this.classList.remove('hot')"
+             ondrop="dropFiles(event)">
+          <h3>Add your own cursors</h3>
+          <p>Drag a <b>.zip / .7z / .rar</b> here, or single <b>.cur / .ani</b> files, or pick a whole unzipped folder.
+             Everything lands in <b>Packs</b> and is unpacked for you.</p>
+          <div class="row" style="justify-content:center">
+            <button class="btn p sm" onclick="document.getElementById('fZip').click()">Upload ZIP / archive</button>
+            <button class="btn sm" onclick="document.getElementById('fCur').click()">Upload .cur / .ani files</button>
+            <button class="btn sm" onclick="document.getElementById('fDir').click()">Upload an unzipped folder</button>
+          </div>
+          <input type="file" id="fZip" accept=".zip,.7z,.rar" multiple style="display:none" onchange="pickFiles(this.files)">
+          <input type="file" id="fCur" accept=".cur,.ani,.inf" multiple style="display:none" onchange="pickFiles(this.files)">
+          <input type="file" id="fDir" webkitdirectory directory multiple style="display:none" onchange="pickFiles(this.files)">
+          <div class="uprog" id="uprog"><i id="ubar"></i></div>
+          <p class="hint" id="utxt" style="margin-top:6px"></p>
+        </div>
+        <div class="row" style="margin-bottom:12px">
+          <input type="text" id="search" placeholder="Search packs..." style="flex:1;min-width:160px" oninput="renderPacks()">
+          <select id="filter" style="width:170px" onchange="renderPacks()">
+            <option value="all">All packs</option>
+            <option value="on">Only ON (in rotation)</option>
+            <option value="off">Only OFF (skipped)</option>
+            <option value="animated">Only animated (.ani)</option>
+            <option value="static">Only static</option>
+            <option value="rgb">Only RGB / rainbow</option>
+          </select>
+          <button class="btn sm" onclick="api('/api/toggleall?on=1')">All ON</button>
+          <button class="btn sm" onclick="api('/api/toggleall?on=0')">All OFF</button>
+          <button class="btn sm" onclick="api('/api/toggleweak')" title="Turn OFF packs that are missing most cursors">Turn OFF incomplete</button>
+          <label class="hint" style="display:flex;align-items:center;gap:6px;margin:0">
+            <input type="checkbox" id="animOn" checked style="width:auto" onchange="toggleAnim()"> Play animations</label>
+        </div>
+        <div class="row" style="margin-bottom:12px">
+          <span class="status">Many packs ship Small/Regular/Large/Extra Large copies — keep only the size you like:</span>
+          <button class="btn sm" onclick="api('/api/keepsize?size=Small')">Only Small</button>
+          <button class="btn sm" onclick="api('/api/keepsize?size=Regular')">Only Regular</button>
+          <button class="btn sm" onclick="api('/api/keepsize?size=Large')">Only Large</button>
+          <button class="btn sm" onclick="api('/api/keepsize?size=Extra Large')">Only Extra Large</button>
+        </div>
+        <div id="packList"></div>
+      </div>
+
+      <div id="pane-store" style="display:none"></div>
+      <div id="pane-diag" style="display:none"></div>
+    </div>
+  </div>
+</div>
+</div>
+
+<dialog id="dlg">
+  <div class="dh">
+    <b id="dlgTitle">Customize</b>
+    <div class="spacer"></div>
+    <label style="margin:0;display:flex;align-items:center;gap:6px;font-size:12px">
+      <input type="checkbox" id="mixAll" style="width:auto" onchange="fillMapTable()"> Allow files from other packs
+    </label>
+    <button class="btn sm" onclick="document.getElementById('dlg').close()">Close</button>
+  </div>
+  <div class="db">
+    <p class="status">Choose exactly which cursor file is used for each job — loading, location, text, link, resize and more. "Windows default" leaves that one untouched.</p>
+    <table id="mapTable"></table>
+  </div>
+  <div class="df">
+    <button class="btn" onclick="autoDetect()">Reset to auto detect</button>
+    <button class="btn p" onclick="saveMapping(false)">Save</button>
+    <button class="btn g" onclick="saveMapping(true)">Save &amp; Apply</button>
+  </div>
+</dialog>
+
+<dialog id="bdlg">
+  <div class="dh">
+    <b>Create your own cursor pack</b>
+    <div class="spacer"></div>
+    <button class="btn sm" onclick="document.getElementById('bdlg').close()">Close</button>
+  </div>
+  <div class="db">
+    <p class="status">Pick a pack to start from, then swap any single cursor for one from another pack.
+    Your mix is saved as a normal pack inside <b>Packs\_My Custom Packs</b> and joins the rotation.</p>
+    <div class="row" style="margin:10px 0">
+      <input type="text" id="bName" placeholder="Name your pack, e.g. My RGB mix" style="flex:1;min-width:200px">
+      <select id="bBase" style="width:260px" onchange="builderFillFromBase()"><option value="">Start from a pack...</option></select>
+      <button class="btn sm" onclick="builderClear()">Clear all</button>
+    </div>
+    <input type="text" id="bFilter" placeholder="Filter the file lists (pack name or file name)..." oninput="renderBuilder()" style="margin-bottom:8px">
+    <div id="bRows"></div>
+  </div>
+  <div class="df">
+    <span class="status" id="bCount">0 cursors chosen</span>
+    <div class="spacer"></div>
+    <button class="btn p" onclick="createPack()">Create pack</button>
+  </div>
+</dialog>
+
+
+<div class="toast" id="toast"></div>
+
+<script>
+let S = null, dlgScheme = null, tick = 0, curTab = 'packs', busy = false;
+let storeQ = '', storeTag = 'all';
+const storeSel = new Set();
+
+function toast(m){const t=document.getElementById('toast');t.textContent=m;t.classList.add('on');clearTimeout(t._t);t._t=setTimeout(()=>t.classList.remove('on'),2600);}
+function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+function leaf(p){return String(p||'').split(/[\\/]/).pop();}
+
+async function req(url, opts){
+  const r = await fetch(url, Object.assign({cache:'no-store'}, opts||{}));
+  const j = await r.json();
+  if(!j || !j.schemes) throw new Error((j && j.status) || ('HTTP '+r.status));
+  return j;
+}
+async function load(){
+  try{ S = await req('/api/state'); render(); }
+  catch(e){ toast('Cannot reach the app - start it with Start.bat  ('+e.message+')'); }
+}
+async function api(url, opts){
+  if(busy) return; busy = true;
+  try{ S = await req(url, opts); render(); toast(S.status || 'Done'); }
+  catch(e){ toast('Failed: '+e.message); }
+  finally{ busy = false; }
+}
+async function quitApp(){
+  if(!confirm('Exit Cursor Rotator? Rotation stops until you start it again.')) return;
+  try{ await fetch('/api/exit'); }catch(e){}
+  document.body.innerHTML = '<div class="empty" style="padding-top:80px">Cursor Rotator closed.<br>Start it again with <code>Start.bat</code>.</div>';
+}
+
+/* ---------- settings ---------- */
+function quick(sec){
+  const u = sec % 3600 === 0 ? 3600 : (sec % 60 === 0 ? 60 : 1);
+  document.getElementById('ivUnit').value = u;
+  document.getElementById('ivVal').value = sec / u;
+  save();
+}
+function collect(){
+  const unit = parseFloat(document.getElementById('ivUnit').value) || 1;
+  const val  = parseFloat(document.getElementById('ivVal').value) || 30;
+  return {
+    enabled: document.getElementById('enabled').checked,
+    randomOrder: document.getElementById('randomOrder').checked,
+    avoidRepeat: document.getElementById('avoidRepeat').checked,
+    fillMissing: document.getElementById('fillMissing').checked,
+    applyOnStart: document.getElementById('applyOnStart').checked,
+    notifications: document.getElementById('notifications').checked,
+    hotkeys: document.getElementById('hotkeys').checked,
+    intervalSeconds: Math.max(5, Math.round(val * unit))
+  };
+}
+async function save(){
+  if(busy) return; busy = true;
+  try{
+    S = await req('/api/save', {method:'POST', body: JSON.stringify(collect())});
+    const want = document.getElementById('autorun').checked;
+    if(want !== S.autorun){ S = await req('/api/autorun?on=' + (want ? 1 : 0)); }
+    render(); toast('Saved');
+  }catch(e){ toast('Save failed: '+e.message); }
+  finally{ busy = false; }
+}
+
+/* ---------- render ---------- */
+function render(){
+  if(!S) return;
+  const c = S.config || {};
+  ['enabled','randomOrder','avoidRepeat','fillMissing','applyOnStart','notifications','hotkeys'].forEach(k=>{
+    const el = document.getElementById(k); if(el) el.checked = !!c[k];
+  });
+  document.getElementById('autorun').checked = !!S.autorun;
+
+  const secs = Number(S.intervalSeconds || 1800);
+  const uEl = document.getElementById('ivUnit'), vEl = document.getElementById('ivVal');
+  if(document.activeElement !== vEl && document.activeElement !== uEl){
+    if(secs % 3600 === 0){ uEl.value = 3600; vEl.value = secs/3600; }
+    else if(secs % 60 === 0){ uEl.value = 60; vEl.value = secs/60; }
+    else { uEl.value = 1; vEl.value = secs; }
+  }
+  document.getElementById('dot').className = 'dot' + (c.enabled ? '' : ' off');
+  document.getElementById('curPill').textContent = 'Current: ' + (c.lastScheme ? leaf(c.lastScheme) : 'none');
+  document.getElementById('statusLine').textContent = S.status || '';
+  document.getElementById('cntPacks').textContent = S.schemes.length;
+  tick = S.nextInSec || 0; paintNext();
+  renderPacks(); renderStore(); renderDiag();
+}
+function paintNext(){
+  const c = S && S.config, el = document.getElementById('nextPill');
+  if(!c || !c.enabled){ el.textContent = 'Rotation paused'; return; }
+  const h = Math.floor(tick/3600), m = Math.floor((tick%3600)/60), s = tick%60;
+  el.textContent = 'Next in ' + (h ? h+'h '+m+'m' : (m ? m+'m '+s+'s' : s+'s'));
+}
+function renderPacks(){
+  const box = document.getElementById('packList');
+  if(!S.schemes.length){
+    box.innerHTML = '<div class="empty">No cursor packs detected yet.<br>'
+      + '1. Put <b>.zip</b> packs in the <b>Packs</b> folder → click <b>Rescan</b> (each zip unpacks once, into a folder of the same name)<br>'
+      + '2. Or get ready-made ones from the <b>Download Store</b><br><br>'
+      + '<button class="btn p" onclick="api(\'/api/autofix\')">Fix it for me (re-extract + download starter packs)</button> '
+      + '<button class="btn" onclick="showTab(\'store\')">Open Store</button></div>';
+    return;
+  }
+  const q = (document.getElementById('search').value || '').toLowerCase();
+  const f = document.getElementById('filter').value;
+  const list = S.schemes.filter(s =>
+      (!q || s.name.toLowerCase().includes(q)) &&
+      (f === 'all' || (f === 'on' && s.enabled) || (f === 'off' && !s.enabled)
+        || (f === 'animated' && s.animated) || (f === 'static' && !s.animated)
+        || (f === 'rgb' && /rainbow|rgb/i.test(s.name))));
+  const onCount = S.schemes.filter(s=>s.enabled).length;
+  if(!list.length){ box.innerHTML = '<div class="empty">No pack matches this filter.</div>'; return; }
+  const groups = {};
+  list.forEach(s => { (groups[s.group || 'Other'] = groups[s.group || 'Other'] || []).push(s); });
+  box.innerHTML = '<p class="status" style="margin:0 0 10px">' + onCount + ' of ' + S.schemes.length
+   + ' packs are ON and will be used in rotation.'
+   + (S.schemes.filter(s=>s.animated).length ? '  ' + S.schemes.filter(s=>s.animated).length + ' of them are animated - the previews below really move.' : '')
+   + '</p>'
+   + Object.keys(groups).map(g => groupBlock(g, groups[g])).join('');
+  stopAnims(); startAnims();
+}
+function groupBlock(g, list){
+  const anyOn = list.some(s => s.enabled);
+  return '<div style="margin-bottom:16px">'
+    + '<div class="row" style="margin-bottom:8px">'
+    +   '<b style="font-size:13px">' + esc(g) + '</b>'
+    +   '<span class="chip">' + list.length + ' pack' + (list.length>1?'s':'') + '</span>'
+    +   '<div class="spacer"></div>'
+    +   '<button class="btn sm" onclick="api(\'/api/togglegroup?on=' + (anyOn?0:1) + '&group=' + encodeURIComponent(g) + '\')">'
+    +     (anyOn ? 'Turn group OFF' : 'Turn group ON') + '</button>'
+    + '</div>'
+    + '<div class="schemes">' + list.map(s => {
+    const pct = Math.round(s.coverage / s.total * 100);
+    const PV = [['Arrow','Normal','A'],['Wait','Busy / loading','L'],['AppStarting','Working in background','W'],
+                ['IBeam','Text select','T'],['Hand','Link select','H'],['Pin','Location','P'],['SizeAll','Move','M']];
+    const prev = PV.map(([k,lbl,tag]) => {
+      const p = (s.overrides && s.overrides[k]) || s.map[k];
+      if(!p) return '';
+      const isAni = /\.ani$/i.test(p);
+      return '<div class="pv' + (isAni ? ' ani' : '') + '" title="' + lbl + ' — ' + esc(leaf(p)) + (isAni ? ' (animated)' : '') + '">'
+        + '<img loading="lazy"' + (isAni ? ' data-ani="' + esc(p) + '"' : '') + ' src="/file?p='
+        + encodeURIComponent(p) + '" onerror="this.parentNode.style.opacity=.25"><b>' + tag + '</b>'
+        + (isAni ? '<span class="lbl">A</span>' : '') + '</div>';
+    }).join('');
+    const nm = s.name.replace(/'/g, "\\'");
+    const mid = (s.name.replace(/[^a-z0-9]/gi, '') || 'x').slice(-14) + (s.files.length);
+    const badges = (s.animated ? '<span class="badge anim" title="' + s.aniCount + ' animated .ani cursor(s) in this pack">ANIMATED</span>' : '')
+      + (/rainbow|rgb/i.test(s.name) ? '<span class="badge rgb" title="Colour cycling RGB pack">RGB</span>' : '')
+      + (/anime|neuro|noelle|kuro|shiori|wanderer|ellen/i.test(s.name) ? '<span class="badge anime">ANIME</span>' : '');
+    return '<div class="sc' + (S.config.lastScheme === s.name ? ' active' : '') + (s.enabled ? '' : ' off') + '">'
+      + '<div class="row" style="justify-content:space-between;align-items:flex-start">'
+      +   '<div class="nm" title="' + esc(s.name) + '">' + esc(s.title || leaf(s.name)) + '</div>'
+      +   '<label class="toggle" title="ON = this pack is used in random rotation. OFF = never used."><input type="checkbox" ' + (s.enabled ? 'checked' : '')
+      +     ' onchange="api(\'/api/toggle?on=\'+(this.checked?1:0)+\'&name=' + encodeURIComponent(s.name) + '\')"><span class="slider"></span></label>'
+      + '</div>'
+      + '<div class="row" style="gap:4px;margin:4px 0 0">'
+      +   '<span class="badge ' + (s.enabled ? 'on' : 'offb') + '">' + (s.enabled ? 'ON - in rotation' : 'OFF - never used') + '</span>'
+      +   badges + (s.weak ? '<span class="badge offb" title="Only ' + s.coverage + ' of ' + s.total + ' cursor jobs found - looks incomplete">INCOMPLETE</span>' : '') + '</div>'
+      + '<div class="mt">' + (s.size && s.size !== 'Standard' ? '<span class="chip">' + esc(s.size) + '</span> ' : '') + esc(s.name) + '</div>'
+      + '<div class="prev">' + prev + '</div>'
+      + '<div class="bar"><i style="width:' + pct + '%"></i></div>'
+      + '<div class="mt">' + s.coverage + '/' + s.total + ' cursor jobs detected'
+      +   (s.filled > 0 ? ' <span class="chip" title="Borrowed from this pack\'s own cursors, so nothing falls back to a Windows cursor">+' + s.filled + ' filled</span>' : '')
+      +   ' · ' + s.files.length + ' files'
+      +   (Object.keys(s.overrides||{}).length ? ' · <span class="chip">custom</span>' : '') + '</div>'
+      + '<div class="row"><button class="btn g sm" onclick="apply(\'' + nm + '\')">Apply</button>'
+      + '<button class="btn sm" onclick="openMap(\'' + nm + '\')">Assign cursors</button>'
+      + '<div class="spacer"></div>'
+      + '<div class="menu"><button class="mbtn" onclick="toggleMenu(\'m' + mid + '\', event)" title="More">&#8942;</button>'
+      +   '<div class="mlist" id="m' + mid + '">'
+      +     '<button onclick="apply(\'' + nm + '\')">Apply now</button>'
+      +     '<button onclick="renamePack(\'' + nm + '\')">Rename pack</button>'
+      +     '<button onclick="openMap(\'' + nm + '\')">Assign cursors</button>'
+      +     '<button onclick="openBuilderFrom(\'' + nm + '\')">Use as base for a custom pack</button>'
+      +     '<button class="dgr" onclick="deletePack(\'' + nm + '\')">Delete pack from disk</button>'
+      +   '</div></div>'
+      + '</div>'
+      + '</div>';
+  }).join('') + '</div></div>';
+}
+function apply(n){ api('/api/apply?scheme=' + encodeURIComponent(n)); }
+
+function showTab(t){
+  curTab = t;
+  ['packs','store','diag'].forEach(x => {
+    document.getElementById('pane-'+x).style.display = (x === t ? '' : 'none');
+    document.getElementById('tab-'+x).className = 'tab' + (x === t ? ' on' : '');
+  });
+}
+function renderStore(){
+  const p = document.getElementById('pane-store');
+  if(!S.store || !S.store.length){ p.innerHTML = '<div class="empty">Store unavailable.</div>'; return; }
+  const tags = S.storeTags || [];
+  const q = storeQ.toLowerCase();
+  const list = S.store.filter(i =>
+      (storeTag === 'all'
+        || (storeTag === '__new' && !i.installed)
+        || (storeTag === '__installed' && i.installed)
+        || (i.tags || []).some(t => t.toLowerCase() === storeTag.toLowerCase()))
+      && (!q || (i.name + ' ' + i.desc + ' ' + (i.tags||[]).join(' ')).toLowerCase().includes(q)));
+  const notInst = S.store.filter(i => !i.installed).length;
+  const chip = (id, label, n) => '<button class="fchip' + (storeTag === id ? ' on' : '') + '" onclick="setStoreTag(\'' + id + '\')">'
+      + label + (n === undefined ? '' : ' <b>' + n + '</b>') + '</button>';
+  let html = '<p class="status" style="margin:0 0 10px">Free open-source cursor packs straight from GitHub. One click = download + unzip + ready to rotate. '
+      + S.store.length + ' packs available, ' + (S.store.length - notInst) + ' already installed.</p>'
+    + '<div class="row" style="margin-bottom:8px">'
+    +   '<input type="text" id="storeSearch" placeholder="Search store (rgb, anime, dark, macos...)" style="flex:1;min-width:180px" '
+    +     'value="' + esc(storeQ) + '" oninput="storeQ=this.value;renderStore();document.getElementById(\'storeSearch\').focus()">'
+    + '</div>'
+    + '<div class="chiprow">' + chip('all','All', S.store.length)
+    +   chip('__new','Not installed', notInst) + chip('__installed','Installed', S.store.length - notInst)
+    +   tags.map(t => chip(t, t, S.store.filter(i => (i.tags||[]).indexOf(t) >= 0).length)).join('')
+    + '</div>'
+    + '<div class="row" style="margin:10px 0 12px;gap:6px">'
+    +   '<button class="btn sm" onclick="storeSelectShown(1)">Select all shown (' + list.length + ')</button>'
+    +   '<button class="btn sm" onclick="storeSelectShown(0)">Clear selection</button>'
+    +   '<div class="spacer"></div>'
+    +   '<button class="btn p" onclick="dlSelected()">Download selected (' + storeSel.size + ')</button>'
+    +   '<button class="btn g" onclick="dlList(' + JSON.stringify(list.filter(i=>!i.installed).map(i=>i.id)).replace(/"/g,'&quot;') + ')">Download all shown</button>'
+    + '</div>'
+    + '<div id="dlProg" class="dlprog" style="display:none"><div class="bar"><i id="dlBar" style="width:0%"></i></div><div class="status" id="dlTxt"></div></div>';
+  if(!list.length){ p.innerHTML = html + '<div class="empty">No store pack matches this filter.</div>'; return; }
+  html += list.map(i => {
+    const tg = (i.tags || []).map(t => '<span class="badge ' + tagCls(t) + '">' + esc(t) + '</span>').join('');
+    return '<div class="st">'
+      + '<input type="checkbox" class="selbox" ' + (storeSel.has(i.id) ? 'checked' : '') + (i.installed ? ' disabled' : '')
+      +   ' onchange="storePick(\'' + i.id + '\', this.checked)">'
+      + '<div class="info"><div style="font-size:13px;font-weight:600">' + esc(i.name)
+      +   ' <span class="chip">' + esc(i.size) + '</span></div>'
+      + '<div class="row" style="gap:4px;margin:3px 0">' + tg + '</div>'
+      + '<div class="status">' + esc(i.desc) + ' &middot; by ' + esc(i.author) + '</div></div>'
+      + (i.installed ? '<span class="ok">Installed</span>'
+                     : '<button class="btn g sm" onclick="dl(\'' + i.id + '\',this)">Download</button>') + '</div>';
+  }).join('');
+  p.innerHTML = html;
+}
+function tagCls(t){
+  const l = (t||'').toLowerCase();
+  if(l === 'rgb') return 'rgb';
+  if(l === 'animated') return 'anim';
+  if(l === 'anime') return 'anime';
+  if(l === 'dark') return 'dark';
+  if(l === 'light') return 'light';
+  return '';
+}
+function setStoreTag(t){ storeTag = t; renderStore(); }
+function storePick(id, on){ if(on) storeSel.add(id); else storeSel.delete(id); renderStore(); }
+function storeSelectShown(on){
+  if(!on){ storeSel.clear(); renderStore(); return; }
+  const q = storeQ.toLowerCase();
+  S.store.filter(i => !i.installed
+      && (storeTag === 'all' || (storeTag === '__new') || (storeTag === '__installed' && i.installed)
+          || (i.tags||[]).some(t => t.toLowerCase() === storeTag.toLowerCase()))
+      && (!q || (i.name + ' ' + i.desc + ' ' + (i.tags||[]).join(' ')).toLowerCase().includes(q)))
+    .forEach(i => storeSel.add(i.id));
+  renderStore();
+}
+async function dl(id, btn){
+  if(btn){ btn.disabled = true; btn.textContent = 'Downloading...'; }
+  toast('Downloading, please wait...');
+  try{ S = await req('/api/download?id=' + encodeURIComponent(id)); render(); showTab('store'); toast(S.status); }
+  catch(e){ toast('Download failed: ' + e.message); if(btn){ btn.disabled = false; btn.textContent = 'Download'; } }
+}
+async function dlSelected(){
+  const ids = Array.from(storeSel);
+  if(!ids.length){ toast('Tick the packs you want first (checkbox on the left)'); return; }
+  await dlList(ids);
+}
+async function dlList(ids){
+  ids = (ids || []).filter(x => x);
+  if(!ids.length){ toast('Nothing to download - everything here is installed already'); return; }
+  const box = document.getElementById('dlProg'), bar = document.getElementById('dlBar'), txt = document.getElementById('dlTxt');
+  if(box){ box.style.display = ''; }
+  let done = 0;
+  for(const id of ids){
+    const it = S.store.find(x => x.id === id) || {name:id};
+    if(txt) txt.textContent = 'Downloading ' + it.name + '  (' + (done+1) + ' of ' + ids.length + ') ...';
+    try{ S = await req('/api/download?id=' + encodeURIComponent(id)); }catch(e){}
+    done++;
+    if(bar) bar.style.width = Math.round(done / ids.length * 100) + '%';
+  }
+  storeSel.clear();
+  render(); showTab('store');
+  if(box) setTimeout(() => { box.style.display = 'none'; if(bar) bar.style.width = '0%'; }, 1500);
+  toast(done + ' pack(s) processed. Check My Packs.');
+}
+async function downloadAll(){ await dlList(S.store.filter(i => !i.installed).map(i => i.id)); }
+async function setup7z(btn){
+  if(btn){ btn.disabled = true; btn.textContent = 'Setting up 7-Zip...'; }
+  toast('Downloading 7-Zip, please wait...');
+  try{ S = await req('/api/install7zip'); render(); showTab('diag'); toast(S.status); }
+  catch(e){ toast('Setup failed: ' + e.message); }
+  finally{ if(btn){ btn.disabled = false; btn.textContent = 'Download portable 7-Zip'; } }
+}
+function renderDiag(){
+  const d = S.diag || {};
+  document.getElementById('pane-diag').innerHTML =
+      '<table><tr><th style="width:230px">Check</th><th>Value</th></tr>'
+    + '<tr><td>Packs folder (zips + unpacked folders)</td><td><code>' + esc(S.packsDir) + '</code></td></tr>'
+    + '<tr><td>Unpacking</td><td>Each zip is extracted once into <code>Packs\\&lt;zip name&gt;\\</code> and skipped afterwards</td></tr>'
+    + '<tr><td>Folders scanned</td><td>' + (d.folders||0) + '</td></tr>'
+    + '<tr><td>.cur / .ani files found</td><td>' + (d.cursorFiles||0) + '</td></tr>'
+    + '<tr><td>Packs detected</td><td>' + S.schemes.length + ' (' + S.schemes.filter(s=>s.animated).length + ' animated)</td></tr>'
+    + '<tr><td>Custom packs folder</td><td><code>' + esc(S.customDir || '') + '</code></td></tr>'
+    + '<tr><td>Files ignored (not cursors)</td><td>' + (d.skipped || 0)
+    +   ((d.ignored && d.ignored.length) ? '<br><span class="hint">' + d.ignored.map(esc).join('<br>') + '</span>' : '')
+    +   '<br><span class="hint">These are simply skipped - readme files, images and so on never cause an error.</span></td></tr>'
+    + '<tr><td>Archive extractor</td><td>' + esc(S.extractor || '') + '</td></tr>'
+    + '<tr><td>Last error</td><td>' + esc(d.lastError || 'none') + '</td></tr></table>'
+    + '<p class="status" style="margin-top:10px">.zip files never need any tool. For <b>.rar / .7z</b> the app uses <b>7-Zip</b> — and can set up a portable copy by itself (no install, no admin, no WinRAR trial).</p>'
+    + '<div class="row" style="margin-top:6px"><button class="btn g" onclick="setup7z(this)">Download portable 7-Zip</button></div>'
+    + '<div class="row" style="margin-top:12px">'
+    +   '<button class="btn p" onclick="api(\'/api/autofix\')">Fix it for me</button>'
+    +   '<button class="btn" onclick="api(\'/api/rescan\')">Rescan</button>'
+    +   '<button class="btn" onclick="api(\'/api/reextract\')">Force re-extract all zips</button>'
+    +   '<button class="btn" onclick="fetch(\'/api/openfolder?which=logs\')">Open log folder</button>'
+    + '</div>'
+    + '<h2 style="margin-top:16px">Extraction log</h2><pre>' + esc((S.extract && S.extract.length) ? S.extract.join('\n') : 'Nothing new to extract.') + '</pre>';
+}
+
+/* ---------- mapping editor ---------- */
+function openMap(name){
+  dlgScheme = S.schemes.find(x => x.name === name);
+  if(!dlgScheme) return;
+  document.getElementById('dlgTitle').textContent = 'Assign cursors — ' + leaf(name);
+  document.getElementById('mixAll').checked = false;
+  fillMapTable();
+  document.getElementById('dlg').showModal();
+}
+function fileOptions(cur){
+  const mix = document.getElementById('mixAll').checked;
+  let files = dlgScheme.files.slice();
+  if(mix){ S.schemes.forEach(s => { if(s.name !== dlgScheme.name) files = files.concat(s.files); }); }
+  if(cur && files.indexOf(cur) === -1) files.unshift(cur);
+  return '<option value="">— Windows default —</option>' + files.map(f =>
+    '<option value="' + esc(f) + '"' + (f === cur ? ' selected' : '') + '>' + esc(leaf(f)) + (mix ? '  ·  ' + esc(leaf(f.replace(/[\\/][^\\/]+$/,''))) : '') + '</option>').join('');
+}
+function fillMapTable(){
+  const t = document.getElementById('mapTable');
+  let h = '<tr><th style="width:36px"></th><th style="width:190px">Cursor job</th><th>File used</th><th style="width:90px">Source</th></tr>';
+  S.roles.forEach(r => {
+    const ov  = dlgScheme.overrides && dlgScheme.overrides[r.key];
+    const cur = ov || dlgScheme.map[r.key] || '';
+    const isA = /\.ani$/i.test(cur);
+    const img = '<div class="mapimg">' + (cur ? '<img' + (isA ? ' data-ani="' + esc(cur) + '"' : '') + ' src="/file?p=' + encodeURIComponent(cur) + '" onerror="this.style.opacity=.15">' : '') + '</div>';
+    const src = ov ? '<span class="chip" style="border-color:var(--acc);color:var(--acc)">custom</span>'
+                   : (dlgScheme.map[r.key] ? '<span class="chip">auto</span>' : '<span class="chip">default</span>');
+    h += '<tr><td>' + img + '</td><td>' + esc(r.label) + '</td>'
+       + '<td><select data-role="' + r.key + '" onchange="previewCell(this)">' + fileOptions(cur) + '</select></td>'
+       + '<td>' + src + '</td></tr>';
+  });
+  t.innerHTML = h;
+  stopAnims(); startAnims();
+}
+function previewCell(sel){
+  const cell = sel.closest('tr').querySelector('.mapimg');
+  if(!cell) return;
+  cell.innerHTML = sel.value ? '<img' + (/\.ani$/i.test(sel.value) ? ' data-ani="' + esc(sel.value) + '"' : '') + ' src="/file?p=' + encodeURIComponent(sel.value) + '" onerror="this.style.opacity=.15">' : '';
+  startAnims();
+}
+async function autoDetect(){
+  if(!dlgScheme) return;
+  try{
+    S = await req('/api/resetmap?name=' + encodeURIComponent(dlgScheme.name));
+    dlgScheme = S.schemes.find(x => x.name === dlgScheme.name);
+    fillMapTable(); render(); toast('Auto detection restored');
+  }catch(e){ toast('Failed: ' + e.message); }
+}
+async function saveMapping(applyAfter){
+  if(!dlgScheme) return;
+  const ov = JSON.parse(JSON.stringify(S.config.overrides || {}));
+  const m = {};
+  document.querySelectorAll('#mapTable select').forEach(sl => { if(sl.value) m[sl.dataset.role] = sl.value; });
+  ov[dlgScheme.name] = m;
+  try{
+    S = await req('/api/save', {method:'POST', body: JSON.stringify({overrides: ov})});
+    if(applyAfter) S = await req('/api/apply?scheme=' + encodeURIComponent(dlgScheme.name));
+    render(); document.getElementById('dlg').close();
+    toast(applyAfter ? 'Saved and applied' : 'Mapping saved');
+  }catch(e){ toast('Save failed: ' + e.message); }
+}
+
+
+/* ================= animated .ani previews ================= */
+let animOn = true;
+const aniMeta = new Map();      // path -> {frames, seq, rates}
+const aniTimers = new Set();
+
+function stopAnims(){ aniTimers.forEach(t => clearTimeout(t)); aniTimers.clear(); }
+function toggleAnim(){
+  animOn = document.getElementById('animOn').checked;
+  try{ localStorage.setItem('cr-anim', animOn ? '1' : '0'); }catch(e){}
+  stopAnims();
+  if(animOn) startAnims(); else document.querySelectorAll('img[data-ani]').forEach(im => { im.src = '/file?p=' + encodeURIComponent(im.dataset.ani); });
+}
+async function metaFor(path){
+  if(aniMeta.has(path)) return aniMeta.get(path);
+  try{
+    const r = await fetch('/api/aniinfo?p=' + encodeURIComponent(path), {cache:'force-cache'});
+    const j = await r.json();
+    aniMeta.set(path, j);
+    return j;
+  }catch(e){ aniMeta.set(path, {frames:0}); return {frames:0}; }
+}
+async function animate(img){
+  const path = img.dataset.ani;
+  const m = await metaFor(path);
+  if(!m || !m.frames || m.frames < 2 || !animOn) return;
+  const seq = (m.seq && m.seq.length) ? m.seq : [...Array(m.frames).keys()];
+  const rates = (m.rates && m.rates.length) ? m.rates : seq.map(() => 100);
+  // preload every frame once so the animation never flickers
+  const urls = [];
+  for(let f = 0; f < m.frames; f++){
+    const u = '/file?p=' + encodeURIComponent(path) + '&frame=' + f;
+    const pre = new Image(); pre.src = u; urls.push(u);
+  }
+  let i = 0;
+  const step = () => {
+    if(!animOn || !document.body.contains(img)) return;
+    const fi = seq[i % seq.length];
+    img.src = urls[Math.min(fi, urls.length - 1)];
+    const wait = Math.max(40, rates[i % rates.length] || 100);
+    i++;
+    const t = setTimeout(step, wait);
+    aniTimers.add(t);
+  };
+  step();
+}
+function startAnims(){
+  if(!animOn) return;
+  const imgs = Array.from(document.querySelectorAll('img[data-ani]')).slice(0, 90);
+  if(!('IntersectionObserver' in window)){ imgs.forEach(animate); return; }
+  const io = new IntersectionObserver((entries, obs) => {
+    entries.forEach(e => { if(e.isIntersecting){ animate(e.target); obs.unobserve(e.target); } });
+  }, {rootMargin:'120px'});
+  imgs.forEach(im => io.observe(im));
+}
+
+/* ================= uploads ================= */
+function dropFiles(ev){
+  ev.preventDefault();
+  document.getElementById('drop').classList.remove('hot');
+  const items = ev.dataTransfer.files;
+  if(items && items.length) pickFiles(items);
+}
+function b64(file){
+  return new Promise((res, rej) => {
+    const fr = new FileReader();
+    fr.onload = () => res(String(fr.result).split(',')[1]);
+    fr.onerror = rej;
+    fr.readAsDataURL(file);
+  });
+}
+async function pickFiles(fileList){
+  const files = Array.from(fileList || []).filter(f => /\.(zip|7z|rar|cur|ani|inf)$/i.test(f.name));
+  const ignored = Array.from(fileList || []).length - files.length;
+  if(!files.length){ toast('Nothing usable here. Send .zip / .7z / .rar or .cur / .ani files.'); return; }
+  const box = document.getElementById('uprog'), bar = document.getElementById('ubar'), txt = document.getElementById('utxt');
+  box.style.display = 'block';
+  let done = 0, ok = 0, msg = '';
+  for(const f of files){
+    txt.textContent = 'Uploading ' + f.name + ' (' + (done + 1) + ' of ' + files.length + ')...';
+    try{
+      const rel = (f.webkitRelativePath || '').split('/')[0] || '';
+      const data = await b64(f);
+      S = await req('/api/upload', {method:'POST', body: JSON.stringify({name: f.name, folder: rel, data: data})});
+      msg = S.status; if(/^Added/.test(msg)) ok++;
+    }catch(e){ msg = 'Failed: ' + e.message; }
+    done++; bar.style.width = Math.round(done / files.length * 100) + '%';
+  }
+  txt.textContent = ok + ' of ' + files.length + ' file(s) added' + (ignored ? ' · ' + ignored + ' unsupported file(s) skipped' : '') + '. ' + msg;
+  setTimeout(() => { box.style.display = 'none'; bar.style.width = '0%'; }, 2500);
+  render(); showTab('packs'); toast(ok + ' file(s) added to Packs');
+}
+
+/* ================= pack actions ================= */
+function toggleMenu(id, ev){
+  ev.stopPropagation();
+  const el = document.getElementById(id);
+  document.querySelectorAll('.mlist.on').forEach(m => { if(m !== el) m.classList.remove('on'); });
+  el.classList.toggle('on');
+}
+document.addEventListener('click', () => document.querySelectorAll('.mlist.on').forEach(m => m.classList.remove('on')));
+
+async function renamePack(name){
+  const leaf = name.split('\\').pop();
+  const to = prompt('New name for this pack:', leaf);
+  if(!to || to === leaf) return;
+  S = await req('/api/renamepack?name=' + encodeURIComponent(name) + '&to=' + encodeURIComponent(to));
+  render(); toast(S.status);
+}
+async function deletePack(name){
+  if(!confirm('Delete this pack from disk?\n\n' + name + '\n\nThe folder and its zip are removed permanently.')) return;
+  S = await req('/api/deletepack?name=' + encodeURIComponent(name));
+  render(); toast(S.status);
+}
+async function removeEverything(){
+  const withPacks = document.getElementById('rmPacks').checked;
+  let msg = 'This will:\n  - restore your original Windows cursors\n  - remove the Start-with-Windows entry\n  - delete all app settings';
+  if(withPacks) msg += '\n  - DELETE every cursor pack in the Packs folder';
+  msg += '\n\nContinue?';
+  if(!confirm(msg)) return;
+  if(withPacks && !confirm('Really delete every downloaded cursor pack? This cannot be undone.')) return;
+  S = await req('/api/removeall?packs=' + (withPacks ? '1' : '0'));
+  render(); toast(S.status);
+}
+
+/* ================= custom pack builder ================= */
+let bSel = {};
+function openBuilder(){
+  if(!S || !S.schemes.length){ toast('Add or download at least one pack first'); return; }
+  bSel = {};
+  const base = document.getElementById('bBase');
+  base.innerHTML = '<option value="">Start from a pack...</option>'
+    + S.schemes.map(s => '<option value="' + esc(s.name) + '">' + esc(leaf(s.name)) + '</option>').join('');
+  document.getElementById('bName').value = '';
+  document.getElementById('bFilter').value = '';
+  renderBuilder();
+  document.getElementById('bdlg').showModal();
+}
+function openBuilderFrom(name){
+  openBuilder();
+  const b = document.getElementById('bBase');
+  b.value = name; builderFillFromBase();
+  const s = S.schemes.find(x => x.name === name);
+  document.getElementById('bName').value = (s ? (s.title || leaf(s.name)) : 'My pack') + ' mix';
+}
+function builderClear(){ bSel = {}; renderBuilder(); }
+function builderFillFromBase(){
+  const n = document.getElementById('bBase').value;
+  const s = S.schemes.find(x => x.name === n);
+  if(!s) return;
+  S.roles.forEach(r => { const f = (s.overrides && s.overrides[r.key]) || s.map[r.key]; if(f) bSel[r.key] = f; });
+  renderBuilder();
+}
+function renderBuilder(){
+  const q = (document.getElementById('bFilter').value || '').toLowerCase();
+  const opts = [];
+  S.schemes.forEach(s => {
+    s.files.forEach(f => {
+      const lbl = leaf(s.name) + '  /  ' + leaf(f);
+      if(!q || lbl.toLowerCase().includes(q)) opts.push([f, lbl]);
+    });
+  });
+  const rows = S.roles.map(r => {
+    const cur = bSel[r.key] || '';
+    const list = '<option value="">— none (Windows default) —</option>'
+      + opts.map(([f, lbl]) => '<option value="' + esc(f) + '"' + (f === cur ? ' selected' : '') + '>' + esc(lbl) + '</option>').join('')
+      + (cur && !opts.some(([f]) => f === cur) ? '<option value="' + esc(cur) + '" selected>' + esc(leaf(cur)) + '</option>' : '');
+    const prev = cur ? '<img src="/file?p=' + encodeURIComponent(cur) + '"' + (/\.ani$/i.test(cur) ? ' data-ani="' + esc(cur) + '"' : '') + '>' : '';
+    return '<div class="builder">'
+      + '<div class="rl">' + esc(r.label) + '</div>'
+      + '<div class="pvbox">' + prev + '</div>'
+      + '<select onchange="bSel[\'' + r.key + '\']=this.value; if(!this.value) delete bSel[\'' + r.key + '\']; renderBuilder()">' + list + '</select>'
+      + '<button class="btn sm" onclick="bSel[\'' + r.key + '\']=\'\'; delete bSel[\'' + r.key + '\']; renderBuilder()">Clear</button>'
+      + '</div>';
+  }).join('');
+  document.getElementById('bRows').innerHTML = rows;
+  document.getElementById('bCount').textContent = Object.keys(bSel).filter(k => bSel[k]).length + ' of ' + S.roles.length + ' cursors chosen';
+  startAnims();
+}
+async function createPack(){
+  const name = (document.getElementById('bName').value || '').trim();
+  if(!name){ toast('Give your pack a name first'); return; }
+  const map = {};
+  Object.keys(bSel).forEach(k => { if(bSel[k]) map[k] = bSel[k]; });
+  if(!Object.keys(map).length){ toast('Choose at least one cursor'); return; }
+  try{
+    S = await req('/api/createpack', {method:'POST', body: JSON.stringify({name: name, map: map})});
+    document.getElementById('bdlg').close();
+    render(); showTab('packs'); toast(S.status);
+  }catch(e){ toast('Could not create pack: ' + e.message); }
+}
+
+try{ if(localStorage.getItem('cr-anim') === '0'){ animOn = false; document.addEventListener('DOMContentLoaded', () => { const e = document.getElementById('animOn'); if(e) e.checked = false; }); } }catch(e){}
+setInterval(() => { if(tick > 0){ tick--; paintNext(); } }, 1000);
+setInterval(() => { if(document.visibilityState === 'visible' && !busy) load(); }, 15000);
+load();
+</script>
+</body>
+</html>

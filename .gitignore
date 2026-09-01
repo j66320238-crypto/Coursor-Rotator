@@ -1,0 +1,25 @@
+# --- user data, never commit ---
+Data/*
+!Data/README.txt
+Tools/
+Packs/*
+!Packs/_PUT-YOUR-ZIP-FILES-HERE.txt
+
+# --- build output ---
+*.zip
+!/.github/**/*.zip
+MANIFEST.txt
+release/
+
+# --- cursor files that may land in the repo by accident ---
+*.cur
+*.ani
+*.rar
+*.7z
+
+# --- editors / OS ---
+.vscode/
+.idea/
+Thumbs.db
+desktop.ini
+*.swp

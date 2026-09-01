@@ -1,0 +1,1 @@
+Put your cursor .zip packs in this folder, then press Rescan in the app (or run Start.bat).

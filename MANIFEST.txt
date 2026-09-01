@@ -1,0 +1,52 @@
+CURSOR ROTATOR 1.0.0 - PACKAGE MANIFEST
+Built: 2026-09-01 17:49 UTC
+Repository layout - ready to push to GitHub.
+
+Compare this list with what you have if you suspect a file is missing or damaged.
+
+FILE                                                BYTES  SHA-256
+----------------------------------------------------------------------------------
+.github/FUNDING.yml                                    68  ae3a7d2ca2e197d5
+.github/ISSUE_TEMPLATE/bug_report.md                  428  bc8706a4d81fe188
+.github/ISSUE_TEMPLATE/pack_request.md                369  a3e59a766f8f55ee
+.github/workflows/lint.yml                           1572  a95f85347027b147
+.gitignore                                            333  92eb7da8848bf22b
+CHANGELOG.md                                         5774  d610c9f30b0fa345
+CONTRIBUTING.md                                      2245  ca29409b4227b4c0
+Change Cursor Now.bat                                 175  3b2ae22a137ab70b
+Create Custom Pack (open app).bat                     213  8d730bda7f6f2105
+CursorRotator.ps1                                  157118  71646f4830d736f7
+Data/README.txt                                       105  b36f3d58c5b0b247
+Download Cursor Packs (menu).bat                      154  fcce72325df7832e
+Download RGB and Animated Packs.bat                   373  bea8923eb67f9aec
+Download Top Cursors.bat                              431  c81b2a89740cc3a5
+Download-Cursors.ps1                                 3376  cde12ffcea5aeef1
+Extract All Packs.bat                                 139  19f9c68ffeee1a45
+Extract-Packs.ps1                                    2294  f1e79d273cbfcb40
+LICENSE                                              1277  fe3f0f7041a22995
+List Packs.bat                                        156  109c32d2fcc945bd
+PUBLISH.md                                           4558  ef237f35e582df91
+Packs/_PUT-YOUR-ZIP-FILES-HERE.txt                     92  b9c76bd2d0398efc
+READ ME FIRST.txt                                    2692  b4a55f9d8735f523
+README.md                                           10530  8a2f2116ef83ab4b
+Remove Everything (uninstall).bat                     706  b83dde14d1d36917
+Rescan Packs.bat                                      157  50c0bf3c0a0f3611
+Restore Windows Cursors.bat                           744  6e3be542b308b186
+Start (with console - debug).bat                      223  28743554dbd549fb
+Start.bat                                             221  02edd10de21729a4
+Stop.bat                                              800  42e355295eb962de
+THIRD-PARTY.md                                       2230  467aca730e2e5aa0
+Unblock Files (fix Windows warning).bat               511  c30421e06f5f211d
+Update - Stop and Unlock Folder.bat                  1393  a21b4c66eb756b00
+docs/COMMANDS.md                                     9493  6645cab0a88a7cb6
+docs/USER-GUIDE.md                                  25650  fe4c8539d55317b1
+docs/banner.png                                   1410188  a62cb248415b4791
+docs/unblock.png                                    33220  a8b551e1d46625ac
+tools/Build-Release.ps1                              2632  1e1a7ec978e2b230
+tools/Embed-Ui.ps1                                   1257  89e54d0cbb880807
+ui.html                                             53633  b08e20e802754478
+----------------------------------------------------------------------------------
+TOTAL                                             1737530  (39 files)
+
+The Packs and Data folders start out empty by design - they fill up when you add
+zips or download packs from the store. Nothing is missing.
