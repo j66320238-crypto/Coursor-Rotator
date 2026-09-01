@@ -10,6 +10,36 @@ Everything runs locally. No installation, no administrator rights, no ads, no ba
 
 ---
 
+## Simple and Advanced mode
+
+The switch at the top right of the control panel decides how much you see.
+
+* **Simple** - the pack list, the interval, ON/OFF switches and the store. Enough for
+  everyday use.
+* **Advanced** - everything above plus manual cursor assignment, hotkeys, the custom pack
+  builder, the diagnostics tab, the updater and the "remove everything" zone.
+
+Your choice is stored in the browser, so the panel opens the same way next time.
+
+## Which pack is running right now?
+
+The first card in the control panel, **Now on your screen**, always shows the pack Windows
+is actually using: its name, animated previews of the main pointers, the time it was
+applied and how long until the next change. If it says nothing is applied yet, press
+**Change now**.
+
+## Duplicates
+
+Packs are fingerprinted by their contents. If two folders hold exactly the same cursors
+(the same zip unpacked twice, a copy, a re-download), the later one gets a **DUPLICATE**
+badge, is skipped by the rotation, and can be deleted with **Remove duplicates**.
+Uploading an archive you already have is refused instead of creating a second copy.
+
+## Updating
+
+Press **Check for updates** in Advanced mode, or run `Update.bat`. Nothing is downloaded
+until you confirm, and your packs and settings survive the update.
+
 ## Table of contents
 
 1. [Quick start](#1-quick-start)

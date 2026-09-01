@@ -20,8 +20,13 @@ param(
     [string]$Tag = '',        # filter store downloads by tag, e.g. -DownloadAll -Tag RGB
     [switch]$RemoveAll,       # restore Windows cursors, clear settings and autorun
     [switch]$DeletePacks,     # with -RemoveAll: also delete every downloaded pack
-    [switch]$Unblock          # clear the Windows "downloaded from the internet" flag and exit
+    [switch]$Unblock,         # clear the Windows "downloaded from the internet" flag and exit
+    [switch]$Update,          # check GitHub for a newer release and install it
+    [switch]$Version          # print the version and exit
 )
+
+$Script:AppVersion = '1.1.0'
+$Script:Repo    = 'j66320238-crypto/Coursor-Rotator'
 
 Set-StrictMode -Off
 $ErrorActionPreference = 'Continue'
@@ -76,7 +81,17 @@ namespace CR {
   public static class Native {
     [DllImport("user32.dll", SetLastError=true, CharSet=CharSet.Auto)]
     public static extern bool SystemParametersInfo(uint uiAction, uint uiParam, IntPtr pvParam, uint fWinIni);
+    [DllImport("user32.dll", SetLastError=true, CharSet=CharSet.Auto)]
+    public static extern IntPtr LoadCursorFromFile(string lpFileName);
+    [DllImport("user32.dll", SetLastError=true)]
+    public static extern bool SetSystemCursor(IntPtr hcur, uint id);
     public static void RefreshCursors() { SystemParametersInfo(0x0057, 0, IntPtr.Zero, 3); }
+    // load a .cur/.ani straight into the running session so the change is instant
+    public static bool ApplyOne(string file, uint id) {
+      IntPtr h = LoadCursorFromFile(file);
+      if (h == IntPtr.Zero) return false;
+      return SetSystemCursor(h, id);
+    }
   }
 }
 "@
@@ -108,6 +123,13 @@ $Script:Roles = @(
     @{ Key = 'Person';      Label = 'Person Select';         Default = '%SystemRoot%\cursors\aero_person.cur' }
 )
 $Script:RoleKeys = @($Script:Roles | ForEach-Object { $_.Key })
+
+# Windows system cursor ids (OCR_*) so a change is visible immediately, without logout
+$Script:OcrIds = @{
+    'Arrow' = 32512; 'IBeam' = 32513; 'Wait' = 32514; 'Crosshair' = 32515; 'UpArrow' = 32516
+    'SizeNWSE' = 32642; 'SizeNESW' = 32643; 'SizeWE' = 32644; 'SizeNS' = 32645; 'SizeAll' = 32646
+    'No' = 32648; 'Hand' = 32649; 'AppStarting' = 32650; 'Help' = 32651; 'NWPen' = 32631
+}
 
 # exact filename tokens (lowercase, symbols removed)
 $Script:ExactTokens = @{
@@ -307,6 +329,34 @@ function Get-PackTitle {
     return $Fallback
 }
 
+function Get-FolderSignature {
+    # hashes every cursor file in a pack - two packs with the same hash hold exactly the same cursors
+    param([object[]]$Files)
+    try {
+        if (-not $Files -or $Files.Count -eq 0) { return '' }
+        $md5 = [System.Security.Cryptography.MD5]::Create()
+        $buf = New-Object byte[] 65536
+        $names = New-Object System.Text.StringBuilder
+        $total = 0L
+        foreach ($f in ($Files | Sort-Object { [System.IO.Path]::GetFileName([string]$_).ToLowerInvariant() })) {
+            try {
+                $fi = New-Object System.IO.FileInfo([string]$f)
+                $total += $fi.Length
+                [void]$names.Append([System.IO.Path]::GetFileName([string]$f).ToLowerInvariant()).Append(':').Append($fi.Length).Append('|')
+                $fs = [System.IO.File]::OpenRead([string]$f)
+                try {
+                    while (($n = $fs.Read($buf, 0, $buf.Length)) -gt 0) { [void]$md5.TransformBlock($buf, 0, $n, $null, 0) }
+                } finally { $fs.Dispose() }
+            } catch { }
+        }
+        $nb = [System.Text.Encoding]::UTF8.GetBytes($names.ToString())
+        [void]$md5.TransformFinalBlock($nb, 0, $nb.Length)
+        $hex = ([System.BitConverter]::ToString($md5.Hash)).Replace('-', '')
+        $md5.Dispose()
+        return ("{0}-{1}-{2}" -f $Files.Count, $total, $hex)
+    } catch { return '' }
+}
+
 function Get-Schemes {
     $schemes = New-Object System.Collections.Generic.List[object]
     $Script:Diag = [ordered]@{ folders = 0; cursorFiles = 0; skipped = 0; note = ''; ignored = (New-Object System.Collections.Generic.List[string]) }
@@ -363,6 +413,8 @@ function Get-Schemes {
 
         $aniN = 0
         foreach ($f9 in $sorted) { if (([string]$f9).ToLowerInvariant().EndsWith('.ani')) { $aniN++ } }
+        # fingerprint of the whole folder, so the very same pack unpacked twice can be spotted
+        $sig = Get-FolderSignature -Files $sorted
         $schemes.Add([pscustomobject]@{
             name     = $rel
             path     = $d
@@ -372,7 +424,20 @@ function Get-Schemes {
             total    = $Script:RoleKeys.Count
             aniCount = [int]$aniN
             title    = [string](Get-PackTitle -Folder $d -Fallback ([System.IO.Path]::GetFileName($d)))
+            sig      = [string]$sig
         })
+    }
+    # the same cursors unpacked twice (two zips, a copy, a re-download) - flag the later ones
+    $seenSig = @{}
+    foreach ($sc in $schemes) {
+        $k = [string]$sc.sig
+        if (-not $k) { Add-Member -InputObject $sc -NotePropertyName 'dupeOf' -NotePropertyValue '' -Force; continue }
+        if ($seenSig.ContainsKey($k)) {
+            Add-Member -InputObject $sc -NotePropertyName 'dupeOf' -NotePropertyValue ([string]$seenSig[$k]) -Force
+        } else {
+            $seenSig[$k] = [string]$sc.name
+            Add-Member -InputObject $sc -NotePropertyName 'dupeOf' -NotePropertyValue '' -Force
+        }
     }
     return , ([object[]]$schemes.ToArray())
 }
@@ -573,7 +638,8 @@ function Get-DefaultConfig {
         avoidRepeat = $true
         notifications = $true
         hotkeys = $true
-        fillMissing = $true             # missing cursor jobs borrow from the same pack
+        fillMissing = $true
+        autoGetTools = $false           # never download anything unless the user asks             # missing cursor jobs borrow from the same pack
         disabledSchemes = @()           # packs switched OFF in the UI
         overrides = New-Object psobject # per pack: role -> file path
         lastScheme = ''
@@ -740,12 +806,16 @@ function Expand-OneArchive {
 
     # 2) 7-Zip (auto-setup portable copy if missing)
     $tool = Get-Extractor
-    if (($null -eq $tool -or $tool.kind -eq 'rar') -and -not $Script:SevenZipTried) {
+    $mayFetch = [bool](Get-Prop $Script:Cfg 'autoGetTools')
+    if (($null -eq $tool -or $tool.kind -eq 'rar') -and -not $Script:SevenZipTried -and $mayFetch) {
         $Script:SevenZipTried = $true      # only try the auto setup once per run
         $msg = Install-SevenZip
         Write-Log "7-Zip setup: $msg"
         $t2 = Get-Extractor
         if ($t2 -and $t2.kind -ne 'rar') { $tool = $t2 }
+    }
+    if (-not $tool -and -not $mayFetch) {
+        Write-Log ("'{0}' needs 7-Zip. Nothing is downloaded automatically - open Diagnostics and press 'Download portable 7-Zip'." -f [System.IO.Path]::GetFileName($Archive)) 'WARN'
     }
     if ($tool) {
         try {
@@ -853,8 +923,21 @@ function Apply-Scheme {
             Set-ItemProperty -Path 'HKCU:\Control Panel\Cursors' -Name $r.Key -Value $val -Type ExpandString -Force -ErrorAction SilentlyContinue
         }
         Set-ItemProperty -Path 'HKCU:\Control Panel\Cursors' -Name '(default)' -Value ([string]$Scheme.name) -Force -ErrorAction SilentlyContinue
+        Set-ItemProperty -Path 'HKCU:\Control Panel\Cursors' -Name 'Scheme Source' -Value 1 -Type DWord -Force -ErrorAction SilentlyContinue
+        # push the cursors into the running session too, so the change is instant
+        $live = 0
+        foreach ($r in $Script:Roles) {
+            if (-not $Script:OcrIds.ContainsKey($r.Key)) { continue }
+            $f = $null
+            $o2 = Get-Prop $ov $r.Key
+            if ($o2 -and [System.IO.File]::Exists([string]$o2)) { $f = [string]$o2 }
+            elseif ($eff.ContainsKey($r.Key)) { $f = [string]$eff[$r.Key] }
+            if (-not $f -or -not [System.IO.File]::Exists($f)) { continue }
+            try { if ([CR.Native]::ApplyOne($f, [uint32]$Script:OcrIds[$r.Key])) { $live++ } } catch { }
+        }
         try { [CR.Native]::RefreshCursors() } catch { }
-        Write-Log "Applied scheme: $($Scheme.name)"
+        $Script:AppliedAt = Get-Date
+        Write-Log "Applied scheme: $($Scheme.name) ($live cursor(s) set live)"
         return $true
     } catch { Log-Err $_ 'Apply-Scheme'; return $false }
 }
@@ -864,8 +947,8 @@ function Get-ActiveSchemes {
     $off = @(Get-Prop $Cfg 'disabledSchemes')
     $m = @($All)
     if ($off.Count -gt 0) { $m = @($m | Where-Object { $off -notcontains $_.name }) }
-    # never rotate into a folder that only holds one or two stray cursors
-    $good = @($m | Where-Object { $_.coverage -ge 6 })
+    # never rotate into a folder that only holds one or two stray cursors, or into a duplicate copy
+    $good = @($m | Where-Object { $_.coverage -ge 6 -and -not $_.dupeOf })
     if ($good.Count -gt 0) { return $good }
     return $m
 }
@@ -1058,6 +1141,97 @@ function Download-StoreMany {
     return $txt
 }
 
+# ---------- Updater ----------
+$Script:UpdateInfo = $null
+
+function Compare-Version {
+    param([string]$A, [string]$B)   # returns 1 if A > B
+    $pa = @(($A -replace '[^0-9\.]', '') -split '\.' | ForEach-Object { [int]('0' + $_) })
+    $pb = @(($B -replace '[^0-9\.]', '') -split '\.' | ForEach-Object { [int]('0' + $_) })
+    for ($i = 0; $i -lt 4; $i++) {
+        $x = if ($i -lt $pa.Count) { $pa[$i] } else { 0 }
+        $y = if ($i -lt $pb.Count) { $pb[$i] } else { 0 }
+        if ($x -gt $y) { return 1 }
+        if ($x -lt $y) { return -1 }
+    }
+    return 0
+}
+
+function Get-UpdateInfo {
+    # asks GitHub for the newest release of this project - only when the user presses the button
+    try {
+        $url = "https://api.github.com/repos/$Script:Repo/releases/latest"
+        $hdr = @{ 'User-Agent' = 'CursorRotator'; 'Accept' = 'application/vnd.github+json' }
+        $rel = Invoke-RestMethod -Uri $url -Headers $hdr -TimeoutSec 30
+        $tag = [string]$rel.tag_name
+        $asset = $null
+        foreach ($a in @($rel.assets)) { if (([string]$a.name).ToLowerInvariant().EndsWith('.zip')) { $asset = $a; break } }
+        $newer = (Compare-Version $tag $Script:AppVersion) -gt 0
+        $Script:UpdateInfo = [pscustomobject]@{
+            checked = $true
+            current = [string]$Script:AppVersion
+            latest  = $tag
+            newer   = [bool]$newer
+            notes   = [string]$rel.body
+            url     = [string]$(if ($asset) { $asset.browser_download_url } else { $rel.zipball_url })
+            page    = [string]$rel.html_url
+        }
+        return $Script:UpdateInfo
+    } catch {
+        $Script:UpdateInfo = [pscustomobject]@{ checked = $true; current = [string]$Script:AppVersion; latest = ''; newer = $false
+            notes = ''; url = ''; page = "https://github.com/$Script:Repo/releases"
+            error = "Could not reach GitHub: $($_.Exception.Message)" }
+        return $Script:UpdateInfo
+    }
+}
+
+function Install-Update {
+    # downloads the release zip and replaces the program files - Packs and Data are never touched
+    try {
+        $info = $Script:UpdateInfo
+        if (-not $info -or -not $info.url) { $info = Get-UpdateInfo }
+        if (-not $info.url) { return 'No download link found - update manually from the releases page' }
+        $tmp = Join-Path $env:TEMP ('cr-update-' + [guid]::NewGuid().ToString('N'))
+        [System.IO.Directory]::CreateDirectory($tmp) | Out-Null
+        $zip = Join-Path $tmp 'update.zip'
+        Write-Log "Downloading update $($info.latest) ..."
+        Invoke-WebRequest -Uri $info.url -OutFile $zip -UseBasicParsing -TimeoutSec 300
+        $out = Join-Path $tmp 'x'
+        [System.IO.Directory]::CreateDirectory($out) | Out-Null
+        [System.IO.Compression.ZipFile]::ExtractToDirectory($zip, $out)
+        # the zip may have a single top folder
+        $srcRoot = $out
+        $tops = @([System.IO.Directory]::GetDirectories($out))
+        $topFiles = @([System.IO.Directory]::GetFiles($out))
+        if ($tops.Count -eq 1 -and $topFiles.Count -eq 0) { $srcRoot = $tops[0] }
+        if (-not [System.IO.File]::Exists((Join-Path $srcRoot 'CursorRotator.ps1'))) {
+            return 'The downloaded package does not look like Cursor Rotator - update cancelled'
+        }
+        $skip = @('packs', 'data', 'tools', '.git', 'release')
+        $copied = 0
+        foreach ($f in [System.IO.Directory]::GetFiles($srcRoot)) {
+            [System.IO.File]::Copy($f, (Join-Path $Root ([System.IO.Path]::GetFileName($f))), $true); $copied++
+        }
+        foreach ($d in [System.IO.Directory]::GetDirectories($srcRoot)) {
+            $leaf = [System.IO.Path]::GetFileName($d)
+            if ($skip -contains $leaf.ToLowerInvariant()) { continue }
+            $dest = Join-Path $Root $leaf
+            if (-not [System.IO.Directory]::Exists($dest)) { [System.IO.Directory]::CreateDirectory($dest) | Out-Null }
+            foreach ($f in [System.IO.Directory]::GetFiles($d, '*', [System.IO.SearchOption]::AllDirectories)) {
+                $rel = $f.Substring($d.Length).TrimStart([char]92, [char]47)
+                $target = Join-Path $dest $rel
+                $td = [System.IO.Path]::GetDirectoryName($target)
+                if (-not [System.IO.Directory]::Exists($td)) { [System.IO.Directory]::CreateDirectory($td) | Out-Null }
+                [System.IO.File]::Copy($f, $target, $true); $copied++
+            }
+        }
+        try { [System.IO.Directory]::Delete($tmp, $true) } catch { }
+        try { Clear-DownloadFlag | Out-Null } catch { }
+        Write-Log "Updated to $($info.latest) - $copied file(s) replaced"
+        return "Updated to $($info.latest). Close the app and start it again to run the new version."
+    } catch { Log-Err $_ 'Install-Update'; return "Update failed: $($_.Exception.Message)" }
+}
+
 # ---------- Pack management: rename / delete / build / import ----------
 function Get-SafeName {
     param([string]$Name)
@@ -1194,7 +1368,33 @@ function Save-UploadedFile {
         $leaf = Get-SafeName ([System.IO.Path]::GetFileName($FileName))
         $ext  = [System.IO.Path]::GetExtension($leaf).ToLowerInvariant()
         if ($ext -eq '.zip' -or $ext -eq '.7z' -or $ext -eq '.rar') {
+            # refuse the very same archive twice, whatever it has been renamed to
+            $md5u = [System.Security.Cryptography.MD5]::Create()
+            $hashNew = ([System.BitConverter]::ToString($md5u.ComputeHash($bytes))).Replace('-', '')
+            $md5u.Dispose()
+            foreach ($old in [System.IO.Directory]::GetFiles($PacksDir)) {
+                $oe = [System.IO.Path]::GetExtension($old).ToLowerInvariant()
+                if ($oe -ne '.zip' -and $oe -ne '.7z' -and $oe -ne '.rar') { continue }
+                try {
+                    $ofi = New-Object System.IO.FileInfo($old)
+                    if ($ofi.Length -ne $bytes.Length) { continue }
+                    $m2 = [System.Security.Cryptography.MD5]::Create()
+                    $oh = ([System.BitConverter]::ToString($m2.ComputeHash([System.IO.File]::ReadAllBytes($old)))).Replace('-', '')
+                    $m2.Dispose()
+                    if ($oh -eq $hashNew) {
+                        return ("Skipped - you already have this exact archive as '{0}'" -f [System.IO.Path]::GetFileName($old))
+                    }
+                } catch { }
+            }
             $dest = Join-Path $PacksDir $leaf
+            if ([System.IO.File]::Exists($dest)) {
+                $i = 2
+                while ([System.IO.File]::Exists($dest)) {
+                    $dest = Join-Path $PacksDir ('{0} ({1}){2}' -f [System.IO.Path]::GetFileNameWithoutExtension($leaf), $i, $ext)
+                    $i++
+                }
+                $leaf = [System.IO.Path]::GetFileName($dest)
+            }
             [System.IO.File]::WriteAllBytes($dest, $bytes)
             $target = Join-Path $PacksDir ([System.IO.Path]::GetFileNameWithoutExtension($leaf))
             if (Expand-OneArchive -Archive $dest -Target $target) {
@@ -1297,6 +1497,20 @@ if ($Every -gt 0) {
     Add-Member -InputObject $Script:Cfg -NotePropertyName 'intervalSeconds' -NotePropertyValue ([double]$Every) -Force
     Save-Config $Script:Cfg
     Write-Host "Rotation interval set to $Every second(s)."
+    return
+}
+if ($Version) { Write-Host ("Cursor Rotator {0}  ({1})" -f $Script:AppVersion, $Script:Repo); return }
+if ($Update) {
+    Write-Host ''
+    Write-Host ("  Cursor Rotator {0} - checking for updates..." -f $Script:AppVersion) -ForegroundColor Cyan
+    $u = Get-UpdateInfo
+    if ($u.error) { Write-Host ('  ' + $u.error) -ForegroundColor Yellow; Write-Host ('  Releases: ' + $u.page); return }
+    if (-not $u.newer) { Write-Host ("  You already have the newest version ({0})." -f $u.current) -ForegroundColor Green; return }
+    Write-Host ("  New version available: {0}  (you have {1})" -f $u.latest, $u.current) -ForegroundColor Green
+    Write-Host ''
+    $a = Read-Host '  Install it now? Your packs and settings are kept. (Y/N)'
+    if ($a -notmatch '^[Yy]') { Write-Host '  Cancelled.'; return }
+    Write-Host (' ' + (Install-Update))
     return
 }
 if ($Unblock) {
@@ -1544,6 +1758,26 @@ $Script:Html = @'
 .danger h2{color:#fca5a5}
 .hint{font-size:11px;color:#8fa0b4}
 .pvwrap{position:relative}
+
+/* --- v1.1 --- */
+.modeSw{display:flex;gap:0;border:1px solid #333e4f;border-radius:999px;overflow:hidden}
+.modeSw button{background:transparent;border:none;color:#9fb3d0;padding:6px 14px;font-size:12px;cursor:pointer}
+.modeSw button.on{background:#2563eb;color:#fff;font-weight:600}
+.now{background:linear-gradient(135deg,#122036,#0f1622);border:1px solid #2b3a52}
+.now .ttl{font-size:16px;font-weight:700;margin:2px 0 2px}
+.now .sub{font-size:12px;color:#8fa0b4}
+.nowPrev{display:flex;gap:8px;flex-wrap:wrap;margin:12px 0 6px}
+.nowPrev .pv{width:40px;height:40px;background:#0d131d;border:1px solid #28313f;border-radius:9px;display:flex;align-items:center;justify-content:center;position:relative}
+.nowPrev .pv img{max-width:30px;max-height:30px;image-rendering:pixelated}
+.live{display:inline-flex;align-items:center;gap:5px;font-size:10px;font-weight:800;color:#4ade80;letter-spacing:.6px}
+.live i{width:7px;height:7px;border-radius:50%;background:#4ade80;box-shadow:0 0 8px #4ade80;animation:bl 1.4s infinite}
+@keyframes bl{0%,100%{opacity:1}50%{opacity:.25}}
+.adv{display:none}
+body.advanced .adv{display:block}
+body.advanced .adv.row{display:flex}
+body.advanced .adv.inl{display:inline-block}
+.badge.dupe{background:#3a2a12;color:#fbbf24;border-color:#5c4318}
+.upd{border:1px solid #2b3648;border-radius:10px;padding:10px;background:#121a27;margin-top:10px;font-size:12px}
 </style>
 </head>
 <body>
@@ -1553,6 +1787,10 @@ $Script:Html = @'
   <span class="pill" id="nextPill">Next: --</span>
   <span class="pill" id="curPill">Current: --</span>
   <div class="spacer"></div>
+  <div class="modeSw" title="Simple hides the expert options">
+    <button id="modeSimple" onclick="setMode('simple')">Simple</button>
+    <button id="modeAdv" onclick="setMode('advanced')">Advanced</button>
+  </div>
   <button class="btn g" onclick="api('/api/random')">Change Now</button>
   <button class="btn" onclick="api('/api/rescan')">Rescan</button>
   <button class="btn d" onclick="api('/api/restore')">Restore Windows Default</button>
@@ -1562,6 +1800,11 @@ $Script:Html = @'
 <div class="grid">
   <!-- LEFT -->
   <div>
+    <div class="card now" id="nowCard">
+      <h2>Now on your screen</h2>
+      <div id="nowBody"></div>
+    </div>
+
     <div class="card">
       <h2>Rotation</h2>
       <div class="sw"><span>Auto rotation</span>
@@ -1589,17 +1832,17 @@ $Script:Html = @'
       </div>
       <p class="status" style="margin:8px 0 0">Minimum 5 seconds.</p>
 
-      <div class="sw" style="margin-top:8px"><span>Random order</span>
+      <div class="sw adv" style="margin-top:8px"><span>Random order</span>
         <label class="toggle"><input type="checkbox" id="randomOrder" onchange="save()"><span class="slider"></span></label></div>
-      <div class="sw"><span>Never repeat same pack twice</span>
+      <div class="sw adv"><span>Never repeat same pack twice</span>
         <label class="toggle"><input type="checkbox" id="avoidRepeat" onchange="save()"><span class="slider"></span></label></div>
-      <div class="sw"><span title="If a pack has no Location/Person/Handwriting cursor, the app borrows the pack's own arrow instead of leaving a Windows cursor behind">Fill missing cursors from the same pack</span>
+      <div class="sw adv"><span title="If a pack has no Location/Person/Handwriting cursor, the app borrows the pack's own arrow instead of leaving a Windows cursor behind">Fill missing cursors from the same pack</span>
         <label class="toggle"><input type="checkbox" id="fillMissing" onchange="save()"><span class="slider"></span></label></div>
-      <div class="sw"><span>Change on app start</span>
+      <div class="sw adv"><span>Change on app start</span>
         <label class="toggle"><input type="checkbox" id="applyOnStart" onchange="save()"><span class="slider"></span></label></div>
-      <div class="sw"><span>Tray notifications</span>
+      <div class="sw adv"><span>Tray notifications</span>
         <label class="toggle"><input type="checkbox" id="notifications" onchange="save()"><span class="slider"></span></label></div>
-      <div class="sw"><span>Global hotkeys<br><span style="font-size:11px;color:var(--muted)">Ctrl+Alt+C change · Ctrl+Alt+P pause</span></span>
+      <div class="sw adv"><span>Global hotkeys<br><span style="font-size:11px;color:var(--muted)">Ctrl+Alt+C change · Ctrl+Alt+P pause</span></span>
         <label class="toggle"><input type="checkbox" id="hotkeys" onchange="save()"><span class="slider"></span></label></div>
       <div class="sw"><span>Start with Windows</span>
         <label class="toggle"><input type="checkbox" id="autorun" onchange="save()"><span class="slider"></span></label></div>
@@ -1619,16 +1862,25 @@ $Script:Html = @'
         <button class="btn sm d" onclick="quitApp()">Exit App</button>
       </div>
       <p class="status" id="statusLine" style="margin-top:10px"></p>
+      <div class="adv">
+        <div class="upd" id="updBox">
+          <div class="row" style="justify-content:space-between">
+            <span>Version <b id="verNum">1.1.0</b></span>
+            <button class="btn sm" onclick="checkUpdate(this)">Check for updates</button>
+          </div>
+          <div id="updMsg" class="hint" style="margin-top:6px">Updates are only fetched when you press the button.</div>
+        </div>
+      </div>
     </div>
 
-    <div class="card">
+    <div class="card adv">
       <h2>Make your own pack</h2>
       <p class="status" style="margin:0 0 10px">Mix cursors from any packs you have — take the arrow from one theme,
       the loading spinner from another — and save it as your own named pack.</p>
       <button class="btn p" style="width:100%" onclick="openBuilder()">Create custom pack</button>
     </div>
 
-    <div class="card danger">
+    <div class="card danger adv">
       <h2>Danger zone</h2>
       <p class="status" style="margin:0 0 10px">Puts Windows back exactly as it was: original cursors, no autorun,
       no settings. Optionally deletes every downloaded pack too.</p>
@@ -1645,7 +1897,7 @@ $Script:Html = @'
       <div class="tabs">
         <button class="tab on" id="tab-packs" onclick="showTab('packs')">My Packs <span class="cnt" id="cntPacks">0</span></button>
         <button class="tab" id="tab-store" onclick="showTab('store')">Download Store</button>
-        <button class="tab" id="tab-diag" onclick="showTab('diag')">Diagnostics</button>
+        <button class="tab adv inl" id="tab-diag" onclick="showTab('diag')">Diagnostics</button>
       </div>
 
       <div id="pane-packs">
@@ -1659,7 +1911,7 @@ $Script:Html = @'
           <div class="row" style="justify-content:center">
             <button class="btn p sm" onclick="document.getElementById('fZip').click()">Upload ZIP / archive</button>
             <button class="btn sm" onclick="document.getElementById('fCur').click()">Upload .cur / .ani files</button>
-            <button class="btn sm" onclick="document.getElementById('fDir').click()">Upload an unzipped folder</button>
+            <button class="btn sm adv inl" onclick="document.getElementById('fDir').click()">Upload an unzipped folder</button>
           </div>
           <input type="file" id="fZip" accept=".zip,.7z,.rar" multiple style="display:none" onchange="pickFiles(this.files)">
           <input type="file" id="fCur" accept=".cur,.ani,.inf" multiple style="display:none" onchange="pickFiles(this.files)">
@@ -1676,14 +1928,17 @@ $Script:Html = @'
             <option value="animated">Only animated (.ani)</option>
             <option value="static">Only static</option>
             <option value="rgb">Only RGB / rainbow</option>
+            <option value="complete">Only complete packs</option>
+            <option value="dupes">Only duplicates</option>
           </select>
           <button class="btn sm" onclick="api('/api/toggleall?on=1')">All ON</button>
           <button class="btn sm" onclick="api('/api/toggleall?on=0')">All OFF</button>
-          <button class="btn sm" onclick="api('/api/toggleweak')" title="Turn OFF packs that are missing most cursors">Turn OFF incomplete</button>
+          <button class="btn sm adv inl" onclick="api('/api/toggleweak')" title="Turn OFF packs that are missing most cursors">Turn OFF incomplete</button>
+          <button class="btn sm adv inl" onclick="removeDupes()" title="Delete packs that contain exactly the same cursors as another pack">Remove duplicates</button>
           <label class="hint" style="display:flex;align-items:center;gap:6px;margin:0">
             <input type="checkbox" id="animOn" checked style="width:auto" onchange="toggleAnim()"> Play animations</label>
         </div>
-        <div class="row" style="margin-bottom:12px">
+        <div class="row adv" style="margin-bottom:12px">
           <span class="status">Many packs ship Small/Regular/Large/Extra Large copies — keep only the size you like:</span>
           <button class="btn sm" onclick="api('/api/keepsize?size=Small')">Only Small</button>
           <button class="btn sm" onclick="api('/api/keepsize?size=Regular')">Only Regular</button>
@@ -1785,11 +2040,11 @@ function quick(sec){
   document.getElementById('ivVal').value = sec / u;
   save();
 }
-function collect(){
+function collect(forceEnabled){
   const unit = parseFloat(document.getElementById('ivUnit').value) || 1;
   const val  = parseFloat(document.getElementById('ivVal').value) || 30;
   return {
-    enabled: document.getElementById('enabled').checked,
+    enabled: (typeof forceEnabled === 'boolean') ? forceEnabled : document.getElementById('enabled').checked,
     randomOrder: document.getElementById('randomOrder').checked,
     avoidRepeat: document.getElementById('avoidRepeat').checked,
     fillMissing: document.getElementById('fillMissing').checked,
@@ -1799,10 +2054,10 @@ function collect(){
     intervalSeconds: Math.max(5, Math.round(val * unit))
   };
 }
-async function save(){
+async function save(forceEnabled){
   if(busy) return; busy = true;
   try{
-    S = await req('/api/save', {method:'POST', body: JSON.stringify(collect())});
+    S = await req('/api/save', {method:'POST', body: JSON.stringify(collect(forceEnabled))});
     const want = document.getElementById('autorun').checked;
     if(want !== S.autorun){ S = await req('/api/autorun?on=' + (want ? 1 : 0)); }
     render(); toast('Saved');
@@ -1831,7 +2086,8 @@ function render(){
   document.getElementById('statusLine').textContent = S.status || '';
   document.getElementById('cntPacks').textContent = S.schemes.length;
   tick = S.nextInSec || 0; paintNext();
-  renderPacks(); renderStore(); renderDiag();
+  const vn = document.getElementById('verNum'); if(vn && S.version) vn.textContent = S.version;
+  renderNow(); renderPacks(); renderStore(); renderDiag();
 }
 function paintNext(){
   const c = S && S.config, el = document.getElementById('nextPill');
@@ -1845,8 +2101,10 @@ function renderPacks(){
     box.innerHTML = '<div class="empty">No cursor packs detected yet.<br>'
       + '1. Put <b>.zip</b> packs in the <b>Packs</b> folder → click <b>Rescan</b> (each zip unpacks once, into a folder of the same name)<br>'
       + '2. Or get ready-made ones from the <b>Download Store</b><br><br>'
-      + '<button class="btn p" onclick="api(\'/api/autofix\')">Fix it for me (re-extract + download starter packs)</button> '
-      + '<button class="btn" onclick="showTab(\'store\')">Open Store</button></div>';
+      + '<button class="btn p" onclick="showTab(\'store\')">Open the store and choose packs</button> '
+      + '<button class="btn g" onclick="getStarterPacks(this)">Download 3 starter packs (13 MB)</button> '
+      + '<button class="btn" onclick="api(\'/api/autofix\')">Re-scan my folder</button>'
+      + '<p class="hint" style="margin-top:12px">Nothing is ever downloaded unless you press one of these buttons.</p></div>';
     return;
   }
   const q = (document.getElementById('search').value || '').toLowerCase();
@@ -1855,12 +2113,20 @@ function renderPacks(){
       (!q || s.name.toLowerCase().includes(q)) &&
       (f === 'all' || (f === 'on' && s.enabled) || (f === 'off' && !s.enabled)
         || (f === 'animated' && s.animated) || (f === 'static' && !s.animated)
+        || (f === 'dupes' && s.dupeOf) || (f === 'complete' && !s.weak && !s.dupeOf)
         || (f === 'rgb' && /rainbow|rgb/i.test(s.name))));
   const onCount = S.schemes.filter(s=>s.enabled).length;
   if(!list.length){ box.innerHTML = '<div class="empty">No pack matches this filter.</div>'; return; }
   const groups = {};
   list.forEach(s => { (groups[s.group || 'Other'] = groups[s.group || 'Other'] || []).push(s); });
-  box.innerHTML = '<p class="status" style="margin:0 0 10px">' + onCount + ' of ' + S.schemes.length
+  const dCount = S.schemes.filter(s => s.dupeOf).length;
+  box.innerHTML = (dCount ? '<div class="upd" style="margin:0 0 10px;border-color:#5c4318;background:#241a0c">'
+      + '<b style="color:#fbbf24">' + dCount + ' duplicate pack' + (dCount > 1 ? 's' : '') + ' found.</b> '
+      + 'These hold exactly the same cursors as a pack you already have, so the rotation skips them. '
+      + '<button class="btn sm" style="margin-left:6px" onclick="removeDupes()">Remove duplicates</button>'
+      + '<button class="btn sm" style="margin-left:4px" onclick="document.getElementById(\'filter\').value=\'dupes\';renderPacks()">Show them</button>'
+      + '</div>' : '')
+   + '<p class="status" style="margin:0 0 10px">' + onCount + ' of ' + S.schemes.length
    + ' packs are ON and will be used in rotation.'
    + (S.schemes.filter(s=>s.animated).length ? '  ' + S.schemes.filter(s=>s.animated).length + ' of them are animated - the previews below really move.' : '')
    + '</p>'
@@ -1903,7 +2169,8 @@ function groupBlock(g, list){
       + '</div>'
       + '<div class="row" style="gap:4px;margin:4px 0 0">'
       +   '<span class="badge ' + (s.enabled ? 'on' : 'offb') + '">' + (s.enabled ? 'ON - in rotation' : 'OFF - never used') + '</span>'
-      +   badges + (s.weak ? '<span class="badge offb" title="Only ' + s.coverage + ' of ' + s.total + ' cursor jobs found - looks incomplete">INCOMPLETE</span>' : '') + '</div>'
+      +   badges + (s.weak ? '<span class="badge offb" title="Only ' + s.coverage + ' of ' + s.total + ' cursor jobs found - looks incomplete">INCOMPLETE</span>' : '')
+      +   (s.dupeOf ? '<span class="badge dupe" title="Same cursors as ' + esc(s.dupeOf) + ' - skipped by the rotation">DUPLICATE</span>' : '') + '</div>'
       + '<div class="mt">' + (s.size && s.size !== 'Standard' ? '<span class="chip">' + esc(s.size) + '</span> ' : '') + esc(s.name) + '</div>'
       + '<div class="prev">' + prev + '</div>'
       + '<div class="bar"><i style="width:' + pct + '%"></i></div>'
@@ -1951,6 +2218,9 @@ function renderStore(){
       + label + (n === undefined ? '' : ' <b>' + n + '</b>') + '</button>';
   let html = '<p class="status" style="margin:0 0 10px">Free open-source cursor packs straight from GitHub. One click = download + unzip + ready to rotate. '
       + S.store.length + ' packs available, ' + (S.store.length - notInst) + ' already installed.</p>'
+    + '<div class="row" style="margin-bottom:8px">'
+    +   '<button class="btn g sm" onclick="getStarterPacks(this)" title="Bibata Modern Ice + GoogleDot Blue + macOS Black">New here? Get the 3 starter packs</button>'
+    + '</div>'
     + '<div class="row" style="margin-bottom:8px">'
     +   '<input type="text" id="storeSearch" placeholder="Search store (rgb, anime, dark, macos...)" style="flex:1;min-width:180px" '
     +     'value="' + esc(storeQ) + '" oninput="storeQ=this.value;renderStore();document.getElementById(\'storeSearch\').focus()">'
@@ -2321,6 +2591,96 @@ async function createPack(){
 }
 
 try{ if(localStorage.getItem('cr-anim') === '0'){ animOn = false; document.addEventListener('DOMContentLoaded', () => { const e = document.getElementById('animOn'); if(e) e.checked = false; }); } }catch(e){}
+
+/* ================= simple / advanced ================= */
+function setMode(m){
+  document.body.classList.toggle('advanced', m === 'advanced');
+  document.getElementById('modeSimple').className = (m === 'simple' ? 'on' : '');
+  document.getElementById('modeAdv').className = (m === 'advanced' ? 'on' : '');
+  try{ localStorage.setItem('cr-mode', m); }catch(e){}
+  if(m !== 'advanced' && curTab === 'diag') showTab('packs');
+}
+function initMode(){
+  let m = 'simple';
+  try{ m = localStorage.getItem('cr-mode') || 'simple'; }catch(e){}
+  setMode(m);
+}
+
+/* ================= now playing ================= */
+function renderNow(){
+  const box = document.getElementById('nowBody');
+  if(!box) return;
+  const cur = S.config && S.config.lastScheme;
+  const s = cur ? S.schemes.find(x => x.name === cur) : null;
+  if(!s){
+    box.innerHTML = '<div class="sub">No cursor pack applied yet.'
+      + (S.schemes.length ? ' Press <b>Change Now</b> or Apply on any pack.' : ' Add a pack first.') + '</div>';
+    return;
+  }
+  const PV = [['Arrow','Normal'],['Wait','Busy'],['AppStarting','Working'],['IBeam','Text'],
+              ['Hand','Link'],['SizeAll','Move'],['No','Unavailable'],['Help','Help']];
+  const prev = PV.map(([k,lbl]) => {
+    const f = (s.overrides && s.overrides[k]) || s.map[k];
+    if(!f) return '';
+    const isA = /\.ani$/i.test(f);
+    return '<div class="pv" title="' + lbl + '"><img' + (isA ? ' data-ani="' + esc(f) + '"' : '')
+      + ' src="/file?p=' + encodeURIComponent(f) + '" onerror="this.style.opacity=.2"></div>';
+  }).join('');
+  box.innerHTML = '<div class="live"><i></i>LIVE ON YOUR SCREEN</div>'
+    + '<div class="ttl">' + esc(s.title || leaf(s.name)) + '</div>'
+    + '<div class="sub">' + esc(s.group || '') + (S.appliedAt ? ' · applied at ' + esc(S.appliedAt) : '')
+    +   ' · ' + s.coverage + '/' + s.total + (s.filled ? ' (+' + s.filled + ' filled)' : '')
+    +   (s.animated ? ' · animated' : '') + '</div>'
+    + '<div class="nowPrev">' + prev + '</div>'
+    + '<div class="row">'
+    +   '<button class="btn g sm" onclick="api(\'/api/random\')">Change now</button>'
+    +   '<button class="btn sm" onclick="save(!S.config.enabled)">' + (S.config.enabled ? 'Pause rotation' : 'Resume rotation') + '</button>'
+    +   '<button class="btn sm adv inl" onclick="openMap(\'' + s.name.replace(/'/g, "\\'") + '\')">Assign cursors</button>'
+    + '</div>';
+}
+
+/* ================= updates ================= */
+async function checkUpdate(btn){
+  const msg = document.getElementById('updMsg');
+  if(btn){ btn.disabled = true; btn.textContent = 'Checking...'; }
+  msg.textContent = 'Asking GitHub...';
+  try{
+    S = await req('/api/checkupdate');
+    const u = S.update || {};
+    if(u.error){ msg.innerHTML = esc(u.error) + ' <a href="' + esc(u.page) + '" target="_blank" style="color:#5b9dff">open releases</a>'; }
+    else if(u.newer){
+      msg.innerHTML = 'Version <b>' + esc(u.latest) + '</b> is available (you have ' + esc(u.current) + ').'
+        + '<div class="row" style="margin-top:8px"><button class="btn p sm" onclick="installUpdate(this)">Update now</button>'
+        + '<a class="btn sm" href="' + esc(u.page) + '" target="_blank">What changed</a></div>';
+    } else {
+      msg.textContent = 'You are up to date (version ' + esc(u.current || '') + ').';
+    }
+  }catch(e){ msg.textContent = 'Check failed: ' + e.message; }
+  if(btn){ btn.disabled = false; btn.textContent = 'Check for updates'; }
+  render();
+}
+async function installUpdate(btn){
+  if(!confirm('Download and install the new version?\n\nYour cursor packs and settings are kept.')) return;
+  if(btn){ btn.disabled = true; btn.textContent = 'Updating...'; }
+  try{ S = await req('/api/installupdate'); toast(S.status); document.getElementById('updMsg').textContent = S.status; }
+  catch(e){ toast('Update failed: ' + e.message); }
+  render();
+}
+
+/* ================= duplicates & starter packs ================= */
+async function removeDupes(){
+  const n = S.schemes.filter(s => s.dupeOf).length;
+  if(!n){ toast('No duplicate packs found'); return; }
+  if(!confirm('Delete ' + n + ' duplicate pack(s)?\n\nThese contain exactly the same cursor files as another pack you already have.')) return;
+  S = await req('/api/removedupes'); render(); toast(S.status);
+}
+async function getStarterPacks(btn){
+  if(btn){ btn.disabled = true; btn.textContent = 'Downloading 3 packs...'; }
+  try{ S = await req('/api/starterpacks'); render(); toast(S.status); }
+  catch(e){ toast('Download failed: ' + e.message); }
+}
+
+initMode();
 setInterval(() => { if(tick > 0){ tick--; paintNext(); } }, 1000);
 setInterval(() => { if(document.visibilityState === 'visible' && !busy) load(); }, 15000);
 load();
@@ -2354,6 +2714,7 @@ function Get-StateJson {
                 enabled = [bool]($off -notcontains $s.name)
                 aniCount = [int]$s.aniCount
                 title = [string]$s.title
+                dupeOf = [string]$s.dupeOf
                 weak = [bool]($s.coverage -lt 6)
                 filled = [int]((Get-FilledMap -Scheme $s -Cfg $Script:Cfg).Count - $s.coverage)
                 animated = [bool]($s.aniCount -gt 0)
@@ -2381,6 +2742,10 @@ function Get-StateJson {
             intervalSeconds = $iv
             extractor = [string]$extractor
             status = [string]$Script:Status
+            version = [string]$Script:AppVersion
+            repo = [string]$Script:Repo
+            appliedAt = [string]$(if ($Script:AppliedAt) { $Script:AppliedAt.ToString('HH:mm:ss') } else { '' })
+            update = $Script:UpdateInfo
             autorun = [bool](Test-Autorun)
             nextInSec = $secs
             packsDir = [string]$PacksDir
@@ -2546,9 +2911,7 @@ function Handle-Request {
             $Script:ExtractReport = Expand-AllArchives -Force
             $Script:Schemes = Get-Schemes
             if (@($Script:Schemes).Count -eq 0) {
-                foreach ($id in @('bibata-modern-ice','googledot-blue','macos-black')) { Download-StoreItem -Id $id | Out-Null }
-                $Script:Schemes = Get-Schemes
-                $Script:Status = "Auto fix: downloaded starter packs - $(@($Script:Schemes).Count) pack(s) ready"
+                $Script:Status = 'Re-checked every file. Still no cursor pack here - add a zip yourself or pick packs in the Download Store (nothing is downloaded without you asking).'
             } else {
                 $Script:Status = "Auto fix: $(@($Script:Schemes).Count) pack(s) found"
             }
@@ -2578,6 +2941,32 @@ function Handle-Request {
             Add-Member -InputObject $Script:Cfg -NotePropertyName 'disabledSchemes' -NotePropertyValue ([string[]]$off.ToArray()) -Force
             Save-Config $Script:Cfg
             $Script:Status = "$n incomplete pack(s) turned OFF"
+            Send-Response $Ctx (Get-StateJson); return
+        }
+        if ($path -eq '/api/checkupdate') {
+            $u = Get-UpdateInfo
+            $Script:Status = if ($u.newer) { "Update available: $($u.latest) (you have $($u.current))" }
+                             elseif ($u.error) { [string]$u.error }
+                             else { "You are up to date (version $($u.current))" }
+            Send-Response $Ctx (Get-StateJson); return
+        }
+        if ($path -eq '/api/installupdate') {
+            $Script:Status = Install-Update
+            Send-Response $Ctx (Get-StateJson); return
+        }
+        if ($path -eq '/api/removedupes') {
+            $n = 0
+            foreach ($sc in @($Script:Schemes | Where-Object { $_.dupeOf })) {
+                $r = Remove-Pack -Name ([string]$sc.name) -WithArchive $true
+                if ($r -like 'Deleted*') { $n++ }
+            }
+            $Script:Schemes = Get-Schemes
+            $Script:Status = if ($n) { "$n duplicate pack(s) deleted" } else { 'No duplicates found' }
+            Send-Response $Ctx (Get-StateJson); return
+        }
+        if ($path -eq '/api/starterpacks') {
+            $Script:Status = Download-StoreMany -Ids @('bibata-modern-ice','googledot-blue','macos-black')
+            $Script:Schemes = Get-Schemes
             Send-Response $Ctx (Get-StateJson); return
         }
         if ($path -eq '/api/downloadmany') {
@@ -2716,7 +3105,16 @@ try {
     }
 } catch { Write-Log "Tray icon unavailable: $($_.Exception.Message)" 'WARN' }
 
-if (-not $NoBrowser) { try { Start-Process $Url } catch { } }
+if (-not $NoBrowser) {
+    # open the control panel in the default browser, with fallbacks for locked-down systems
+    $opened = $false
+    try { Start-Process $Url | Out-Null; $opened = $true } catch { }
+    if (-not $opened) { try { Start-Process 'explorer.exe' $Url | Out-Null; $opened = $true } catch { } }
+    if (-not $opened) { try { Start-Process 'rundll32.exe' ("url.dll,FileProtocolHandler " + $Url) | Out-Null; $opened = $true } catch { } }
+    if (-not $opened) { try { & cmd.exe /c start "" $Url; $opened = $true } catch { } }
+    if ($opened) { Write-Log "Control panel opened in the browser: $Url" }
+    else { Write-Log "Could not open a browser automatically. Open $Url yourself." 'WARN' }
+}
 
 # ---------- Hotkeys ----------
 $Script:HK = $null

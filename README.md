@@ -55,7 +55,7 @@
 1. Download the ZIP        Code -> Download ZIP   (or a release zip)
 2. IMPORTANT, do it first  right-click the ZIP -> Properties -> tick "Unblock" -> OK
 3. Extract it anywhere     e.g. E:\mouse pointers\CursorRotator
-4. Double-click            Start.bat
+4. Double-click            Start.bat  (the control panel opens in your browser)
 5. No packs yet?           "Download Cursor Packs (menu).bat" -> pick a category
 ```
 
@@ -127,6 +127,25 @@ individual cursor for one from any other pack, give it a name and save. The resu
 `Packs\_My Custom Packs\<your name>\` with role-named files, so detection is perfect and it behaves
 like any other pack.
 
+## Simple and Advanced mode
+
+The control panel opens in **Simple** mode: pack list, interval, ON/OFF and the store.
+Switch to **Advanced** (top right) for role assignment, hotkeys, the pack builder,
+diagnostics, the updater and the reset zone. Your choice is remembered.
+
+## Staying up to date
+
+Nothing is ever downloaded on its own. When you want a newer version, press
+**Check for updates** in Advanced mode, or run `Update.bat`. The app asks GitHub for the
+latest release, shows what changed and only installs after you confirm. Your `Packs/`
+folder, settings and custom packs are left alone.
+
+## No surprise downloads
+
+Cursor packs, portable 7-Zip and updates are only fetched when you click the matching
+button. On first start the app simply scans the `Packs` folder; if it is empty you get the
+store and a "3 starter packs" button instead of an automatic download.
+
 ## Removing it
 
 * **Restore Windows Default** — original cursors back, app keeps running.
@@ -148,6 +167,8 @@ like any other pack.
 | `.\CursorRotator.ps1 -Setup7Zip` | Fetch portable 7-Zip for `.rar` / `.7z` |
 | `.\CursorRotator.ps1 -RemoveAll` | Restore cursors, clear settings, remove autorun |
 | `.\CursorRotator.ps1 -RemoveAll -DeletePacks` | The same, and delete every pack |
+| `.\CursorRotator.ps1 -Update` | Check GitHub for a newer version and install it |
+| `.\CursorRotator.ps1 -Version` | Print the version number |
 
 Full reference, including the local HTTP API: **[docs/COMMANDS.md](docs/COMMANDS.md)**.
 

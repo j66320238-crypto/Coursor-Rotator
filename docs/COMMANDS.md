@@ -136,7 +136,11 @@ Every endpoint returns the full state as JSON.
 | `GET /api/install7zip` | Download and set up portable 7-Zip |
 | `GET /api/rescan` | Extract new archives and rescan |
 | `GET /api/reextract` | Force re-extract every archive |
-| `GET /api/autofix` | Force re-extract, and download starter packs if nothing is found |
+| `GET /api/autofix` | Force a re-extract and re-scan (never downloads anything) |
+| `GET /api/starterpacks` | Download the three starter packs (only when you click) |
+| `GET /api/removedupes` | Delete every pack marked as a duplicate |
+| `GET /api/checkupdate` | Ask GitHub for the newest release (no download) |
+| `GET /api/installupdate` | Download and install that release |
 | `GET /api/restore` | Restore the original Windows cursors |
 | `GET /api/autorun?on=1\|0` | Add or remove the Startup shortcut |
 | `GET /api/openfolder?which=packs\|logs` | Open a folder in Explorer |

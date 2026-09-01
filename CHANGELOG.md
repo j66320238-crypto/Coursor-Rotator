@@ -3,6 +3,43 @@
 All notable changes to this project are documented here.
 Versions follow [semantic versioning](https://semver.org/).
 
+## 1.1.0 - 2026-09-01
+
+### Added
+
+* **Now on your screen** panel: shows the pack that is really applied right now, with
+  live previews, the time it was applied and the countdown to the next change.
+* **Simple / Advanced modes.** Simple shows only the everyday controls; Advanced adds
+  role assignment, hotkeys, the pack builder, diagnostics, the updater and the reset zone.
+  The choice is remembered in the browser.
+* **Built-in updater.** *Advanced -> Check for updates* asks GitHub for the newest release
+  and can install it in place; your `Packs/` folder and settings are never touched.
+  Also available as `Update.bat` and `CursorRotator.ps1 -Update`, plus `-Version`.
+* **Duplicate detection.** Every pack folder is fingerprinted (file names, sizes and
+  content hash). A pack that holds exactly the same cursors as one you already have is
+  marked DUPLICATE, skipped by the rotation, and can be deleted with one click.
+  Uploading the very same archive twice is refused with a clear message.
+* `Start.bat` now opens the control panel in your browser by itself (with three fallbacks
+  if the default browser cannot be launched).
+* New "Get the 3 starter packs" button in the store and on the empty state.
+
+### Changed
+
+* **Nothing is downloaded unless you press a button.** The old automatic 7-Zip fetch and the
+  automatic starter-pack download are gone; the 7-Zip helper only runs if you enable
+  `autoGetTools`, and *Fix it for me* now just re-scans your folder.
+* My Packs: duplicate banner, "Only complete packs" and "Only duplicates" filters,
+  "Remove duplicates" action.
+
+### Fixed
+
+* **The rotation now really changes the pointer.** Writing the registry alone often needed a
+  sign-out before Windows noticed. Each cursor is now also pushed into the running session
+  with `LoadCursorFromFile` + `SetSystemCursor`, and `Scheme Source` is set, so the new pack
+  appears instantly. The log reports how many cursors were set live.
+
+---
+
 ## 1.0.0 - 2026-09-01
 
 First public release. Everything below was built and tested before this tag; the
